@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#185a4d"><meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="description" content="Die einfache Kasse für unser Montessori-Fest. Produkte, Verkäufe und Statistik auf einem Gerät.">
+  <title>Montessori · Festkasse</title>
+  <link rel="manifest" href="./manifest.webmanifest"><link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icon-192.png"><link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="header">
+    <a class="brand" href="#kasse" aria-label="Montessori Festkasse"><img class="brand-logo" src="./logo.png" alt="Logo der Fördergemeinschaft Montessori Sünching und Umgebung e.V."><span>Montessori<small>UNSERE FESTKASSE</small></span></a>
+    <nav aria-label="Hauptnavigation">
+      <button data-page="kasse" class="nav-item active"><span>▦</span> Kasse</button>
+      <button data-page="statistik" class="nav-item"><span>▥</span> Statistik</button>
+      <button data-page="einstellungen" class="nav-item"><span>⚙</span> Einstellungen</button>
+    </nav>
+    <span class="connection" id="connection">● Bereit</span>
+  </header>
+  <main id="main"></main>
+  <footer>Mit Freude zusammen feiern. <span>Montessori Festkasse · Daten auf diesem Gerät</span></footer>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <dialog id="confirm-dialog"><h2 id="confirm-title">Bitte bestätigen</h2><p id="confirm-message" class="sub" style="margin:20px 0"></p><div class="actions"><button class="secondary" id="confirm-no">Abbrechen</button><button class="primary" id="confirm-yes">Bestätigen</button></div></dialog>
+  <dialog id="product-dialog">
+    <form id="product-form">
+      <div class="dialog-heading"><h2 id="dialog-title">Produkt anlegen</h2><button type="button" class="icon-button" id="close-dialog" aria-label="Schließen">×</button></div>
+      <input name="id" type="hidden">
+      <label>Produktname<input name="name" required maxlength="60" placeholder="Zum Beispiel: Marmorkuchen"></label>
+      <label>Preis in €<input name="price" inputmode="text" required placeholder="2,50 oder -2,00" maxlength="8"></label>
+      <input name="emoji" type="hidden" value="🍰"><p class="field-label" id="symbol-label">Symbol auswählen</p><div id="symbol-picker" class="symbol-picker" role="group" aria-labelledby="symbol-label"></div>
+      <label class="checkbox"><input name="active" type="checkbox" checked> Auf der Kassenseite anzeigen</label>
+      <p id="form-error" role="alert"></p><button class="primary" type="submit">Produkt speichern</button>
+    </form>
+  </dialog>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
