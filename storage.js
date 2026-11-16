@@ -1,4 +1,5 @@
 import { initialState, validateState } from './model.js';
+import { makePinRecord, matchesPin, validatePinRecord } from './pin.js';
 
 export const LEGACY_KEY = 'montessori-festkasse-v1';
 export const DATABASE_NAME = 'montessori-festkasse';
@@ -8,7 +9,8 @@ const STORES = ['products', 'sales', 'metadata'];
 export function createStorage({
   indexedDB = globalThis.indexedDB,
   name = DATABASE_NAME,
-  readLegacy = () => globalThis.localStorage.getItem(LEGACY_KEY)
+  readLegacy = () => globalThis.localStorage.getItem(LEGACY_KEY),
+  now = () => Date.now()
 } = {}) {
   let connection, opening, initializing;
 
@@ -150,15 +152,74 @@ export function createStorage({
     });
   }
 
-  async function restore(data) {
-    const copy = structuredClone(validateState(data));
+  async function readAdmin() {
     await initialize();
-    await transaction('readwrite', tx => putSnapshot(tx, copy));
+    return transaction('readonly', (tx, done, guard) => {
+      const request = tx.objectStore('metadata').get('admin');
+      request.onsuccess = guard(() => done(validatePinRecord(request.result)));
+    });
+  }
+
+  async function adminStatus() {
+    const record = await readAdmin();
+    return { configured: !!record, lockedUntil: record?.lockedUntil || 0 };
+  }
+
+  function lockedMessage(until) {
+    return `Zu viele falsche PIN-Eingaben. Bitte in ${Math.max(1, Math.ceil((until - now()) / 1000))} Sekunden erneut versuchen.`;
+  }
+
+  async function protectedWrite(pin, action, allowUnconfigured = false) {
+    const expected = await readAdmin();
+    if (!expected && !allowUnconfigured) throw new Error('Bitte zuerst eine Admin-PIN unter Einstellungen festlegen.');
+    if (expected?.lockedUntil > now()) throw new Error(lockedMessage(expected.lockedUntil));
+    // Derivation must happen outside an IDB transaction; awaiting crypto would let that transaction expire.
+    const matches = expected ? await matchesPin(pin, expected) : true;
+    const result = await transaction('readwrite', (tx, done, guard) => {
+      const metadata = tx.objectStore('metadata'), request = metadata.get('admin');
+      request.onsuccess = guard(() => {
+        const current = validatePinRecord(request.result);
+        if (!!current !== !!expected || (current && (current.credentialId !== expected.credentialId || current.revision !== expected.revision))) {
+          throw new Error('Die PIN-Einstellungen wurden in einem anderen Fenster geändert. Bitte erneut versuchen.');
+        }
+        if (current?.lockedUntil > now()) throw new Error(lockedMessage(current.lockedUntil));
+        if (!matches) {
+          const attempts = (current.lockedUntil && current.lockedUntil <= now() ? 0 : current.failedAttempts) + 1;
+          const lockedUntil = attempts >= 5 ? now() + 60000 : 0;
+          metadata.put({ ...current, revision: current.revision + 1, failedAttempts: attempts, lockedUntil });
+          done({ error: lockedUntil ? lockedMessage(lockedUntil) : 'Die Admin-PIN ist falsch.' });
+          return; // Commit the attempt counter without changing products or bookings.
+        }
+        if (current) metadata.put({ ...current, revision: current.revision + 1, failedAttempts: 0, lockedUntil: 0 });
+        action(tx);
+        done({ success: true });
+      });
+    });
+    if (result.error) throw new Error(result.error);
+  }
+
+  async function setAdminPin(newPin, currentPin) {
+    const record = await makePinRecord(newPin);
+    await protectedWrite(currentPin, tx => tx.objectStore('metadata').put(record), true);
+  }
+
+  async function resetBookings(pin) {
+    await protectedWrite(pin, tx => tx.objectStore('sales').clear());
+  }
+
+  async function resetAll(pin) {
+    // putSnapshot only replaces products, sales and their order. The separate admin record remains intact.
+    await protectedWrite(pin, tx => putSnapshot(tx, initialState()));
+  }
+
+  async function restore(data, pin) {
+    const copy = structuredClone(validateState(data));
+    await protectedWrite(pin, tx => putSnapshot(tx, copy), true);
   }
 
   function close() {
     connection?.close(); connection = null; opening = null; initializing = null;
   }
 
-  return { initialize, read, addSale, saveProduct, cancelSale, restore, close };
+  return { initialize, read, addSale, saveProduct, cancelSale, restore, adminStatus, setAdminPin, resetBookings, resetAll, close };
 }

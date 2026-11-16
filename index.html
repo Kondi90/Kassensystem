@@ -34,6 +34,29 @@
       <p id="form-error" role="alert"></p><button class="primary" type="submit">Produkt speichern</button>
     </form>
   </dialog>
+  <dialog id="pin-dialog" aria-labelledby="pin-title">
+    <form id="pin-form">
+      <div class="dialog-heading"><h2 id="pin-title">Admin-PIN festlegen</h2><button type="button" class="icon-button" id="pin-close" aria-label="Schließen">×</button></div>
+      <p class="sub">6 bis 12 Ziffern. Merke dir die PIN gut: Sie wird nicht in Datensicherungen übernommen und kann nicht angezeigt werden.</p>
+      <label id="current-pin-label">Bisherige PIN<input type="password" name="current" inputmode="numeric" maxlength="12" autocomplete="current-password"></label>
+      <label>Neue PIN<input type="password" name="newPin" inputmode="numeric" minlength="6" maxlength="12" pattern="[0-9]{6,12}" required autocomplete="new-password"></label>
+      <label>Neue PIN wiederholen<input type="password" name="repeatPin" inputmode="numeric" minlength="6" maxlength="12" pattern="[0-9]{6,12}" required autocomplete="new-password"></label>
+      <p id="pin-error" class="danger" role="alert"></p><button class="primary" type="submit">PIN speichern</button>
+    </form>
+  </dialog>
+  <dialog id="reset-dialog" aria-labelledby="reset-title">
+    <form id="reset-form">
+      <div class="dialog-heading"><h2 id="reset-title">Buchungen zurücksetzen</h2><button type="button" class="icon-button" id="reset-close" aria-label="Schließen">×</button></div>
+      <p id="reset-description" class="sub"></p>
+      <div class="reset-backup"><strong>Vorher eine Sicherung speichern</strong><p class="sub">Die Sicherung enthält alle Produkte und Buchungen. Prüfe den Download, bevor du fortfährst.</p><button type="button" class="secondary" id="reset-backup">↓ Sicherung herunterladen</button><p id="reset-backup-status" class="sub" role="status"></p></div>
+      <label>Admin-PIN<input type="password" name="pin" inputmode="numeric" minlength="6" maxlength="12" pattern="[0-9]{6,12}" required autocomplete="off"></label>
+      <label class="checkbox"><input type="checkbox" name="acknowledge" required><span>Ich bestätige das endgültige Löschen und habe eine Sicherung gespeichert oder verzichte bewusst darauf.</span></label>
+      <p id="reset-error" class="danger" role="alert"></p><button class="primary destructive" type="submit" id="reset-submit">Jetzt Buchungen löschen</button>
+    </form>
+  </dialog>
+  <dialog id="authorize-dialog" aria-labelledby="authorize-title">
+    <form id="authorize-form"><h2 id="authorize-title">Admin-PIN bestätigen</h2><p class="sub" style="margin-top:16px">Die Wiederherstellung ersetzt vorhandene Produkte und Buchungen.</p><label>Admin-PIN<input type="password" name="pin" inputmode="numeric" minlength="6" maxlength="12" pattern="[0-9]{6,12}" required autocomplete="off"></label><div class="actions"><button type="button" class="secondary" id="authorize-cancel">Abbrechen</button><button type="submit" class="primary">Fortfahren</button></div></form>
+  </dialog>
   <script type="module" src="./app.js"></script>
 </body>
 </html>

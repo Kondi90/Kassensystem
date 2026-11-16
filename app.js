@@ -30,6 +30,7 @@ function renderSymbolPicker() {
   $('#symbol-picker').innerHTML = choices.map(([value,label])=>`<button type="button" class="symbol-choice" data-symbol="${esc(value)}" aria-label="${esc(label)}" aria-pressed="${value===selected}" title="${esc(label)}">${symbol(value)}</button>`).join('');
 }
 let state, page = 'kasse', cart = [], dayFilter = localDay(new Date()), productFilter = '', busy = false, toastTimer;
+let admin = { configured: false }, resetMode = 'bookings', resetSubmitting = false, pinSubmitting = false;
 function confirmAction(message) {
   return new Promise(resolve=>{
     const dialog=$('#confirm-dialog'); $('#confirm-message').textContent=message;
@@ -49,7 +50,8 @@ async function save(operation) {
   try { dataChannel?.postMessage('changed'); } catch { /* A failed notification must never make a committed booking look unsuccessful. */ }
 }
 async function refresh() {
-  state = await database.read();
+  const result = await Promise.all([database.read(), database.adminStatus()]);
+  [state, admin] = result;
   render(); checkOffline();
 }
 async function refreshAfterSave() {
@@ -93,7 +95,45 @@ function settingsPage() {
     <div class="notice">Die Startprodukte und Preise sind Beispiele. Für Pfand zwei Produkte anlegen, z. B. „Becherpfand“ mit 2,00 € und „Pfand zurück“ mit −2,00 €. Negative Preise werden vom Gesamtbetrag abgezogen. Preisänderungen verändern bereits gebuchte Verkäufe nicht.</div>
     <section class="panel"><div class="section-heading"><h2>Eure Produkte <span class="tag">${state.products.filter(p=>p.active).length} aktiv</span></h2><button class="primary" id="new-product">+ Produkt anlegen</button></div><div class="table-wrap"><table><thead><tr><th>Produkt</th><th>Preis</th><th>Status</th><th></th></tr></thead><tbody>${state.products.map(p => `<tr><td><div class="table-product"><span class="tiny-symbol">${symbol(p.emoji)}</span>${esc(p.name)}</div></td><td>${money(p.price)}</td><td><span class="status-dot ${p.active?'':'inactive'}">${p.active?'Aktiv':'Pausiert'}</span></td><td class="right"><button class="secondary" data-edit="${esc(p.id)}" aria-label="${esc(p.name)} bearbeiten">Bearbeiten</button></td></tr>`).join('')}</tbody></table></div></section>
     <div class="settings-grid"><section class="panel"><h2>Daten sichern</h2><p>Produkte und Buchungen liegen in einer lokalen IndexedDB-Datenbank auf diesem Gerät. Eine Sicherung schützt vor Datenverlust, etwa beim Löschen der Website-Daten. Die Statistik synchronisiert sich nicht mit anderen Geräten. Auch bisherige JSON-Sicherungen lassen sich wiederherstellen.</p><div class="actions"><button class="secondary" id="backup">↓ Sicherung herunterladen</button><button class="text-button" id="restore">Sicherung wiederherstellen</button><input class="hidden" type="file" id="backup-file" accept="application/json,.json"></div></section>
-    <section class="panel"><h2>Als App verwenden</h2><p>Auf dem iPad die Kasse in Safari öffnen, auf „Teilen“ tippen und „Zum Home-Bildschirm“ wählen. Nach dem ersten vollständigen Laden kann die App offline genutzt werden.</p><p id="offline-note">Der Offline-Status wird geprüft …</p><p>Vor dem Fest einmal mit Beispielverkäufen auf dem vorgesehenen iPad testen und eine Sicherung anlegen.</p></section></div>`;
+    <section class="panel"><h2>Als App verwenden</h2><p>Auf dem iPad die Kasse in Safari öffnen, auf „Teilen“ tippen und „Zum Home-Bildschirm“ wählen. Nach dem ersten vollständigen Laden kann die App offline genutzt werden.</p><p id="offline-note">Der Offline-Status wird geprüft …</p><p>Vor dem Fest einmal mit Beispielverkäufen auf dem vorgesehenen iPad testen und eine Sicherung anlegen.</p></section></div>
+    <section class="panel admin-panel"><div class="section-heading"><h2>Admin-PIN & Zurücksetzen</h2><button class="secondary" id="configure-pin">${admin.configured?'PIN ändern':'Admin-PIN festlegen'}</button></div><p class="sub">${admin.configured?'Die Admin-PIN ist eingerichtet. Zurücksetzen und Wiederherstellen erfordern die PIN.':'Lege zuerst eine eigene Admin-PIN mit 6 bis 12 Ziffern fest, um die Zurücksetzen-Funktionen freizuschalten.'} Kassieren und Sicherungen herunterladen bleiben ohne PIN möglich.</p><div class="reset-options"><div><h3>Buchungen zurücksetzen</h3><p class="sub">Alle Verkäufe und Stornos entfernen. Die Statistik beginnt bei null; Produkte und Preise bleiben erhalten.</p><button class="secondary danger" data-reset="bookings" ${!admin.configured||busy?'disabled':''}>Buchungen zurücksetzen</button></div><div><h3>Kasse vollständig zurücksetzen</h3><p class="sub">Alle Produkte und Buchungen entfernen und die drei Startprodukte Kuchen, Brezel und Kaffee anlegen. Die Admin-PIN bleibt erhalten.</p><button class="secondary danger" data-reset="all" ${!admin.configured||busy?'disabled':''}>Kasse vollständig zurücksetzen</button></div></div><p class="sub admin-note">Vor beiden Aktionen kannst du eine Sicherung herunterladen. Die PIN gilt nur auf diesem Gerät und ist nicht Teil der Sicherung. Sie ist ein lokaler Bedienungsschutz und verschlüsselt die Datenbank nicht.</p></section>`;
+}
+function setFormPending(form, pending) {
+  for (const field of form.querySelectorAll('input,button')) field.disabled = pending;
+}
+async function openPinSettings() {
+  admin = await database.adminStatus();
+  const form = $('#pin-form');form.reset();$('#pin-error').textContent='';
+  $('#pin-title').textContent=admin.configured?'Admin-PIN ändern':'Admin-PIN festlegen';
+  $('#current-pin-label').classList.toggle('hidden',!admin.configured);
+  form.elements.current.required=admin.configured;
+  $('#pin-dialog').showModal();
+}
+async function openReset(mode) {
+  if(busy)throw new Error('Bitte zuerst die laufende Buchung abwarten.');
+  await refresh();
+  if(!admin.configured)throw new Error('Bitte zuerst eine Admin-PIN festlegen.');
+  resetMode=mode;
+  $('#reset-form').reset();$('#reset-error').textContent='';$('#reset-backup-status').textContent='';
+  $('#reset-title').textContent=mode==='all'?'Kasse vollständig zurücksetzen':'Buchungen zurücksetzen';
+  $('#reset-description').textContent=(mode==='all'?
+    'Alle Produkte, Verkäufe und Stornos werden endgültig entfernt. Danach gibt es wieder Kuchen, Brezel und Kaffee. Die Admin-PIN bleibt erhalten.':
+    'Alle Verkäufe und Stornos werden endgültig entfernt und die Statistik beginnt bei null. Deine Produkte und Preise bleiben erhalten.')+' Ein offener Warenkorb wird ebenfalls geleert. Die Aktion gilt für alle zum Zeitpunkt des Zurücksetzens gespeicherten Buchungen.';
+  $('#reset-submit').textContent=mode==='all'?'Jetzt vollständig zurücksetzen':'Jetzt Buchungen löschen';
+  $('#reset-dialog').showModal();
+}
+function requestAdminPin() {
+  return new Promise(resolve=>{
+    const dialog=$('#authorize-dialog'),form=$('#authorize-form');form.reset();
+    const finish=value=>{dialog.close();form.reset();dialog.oncancel=null;form.onsubmit=null;resolve(value);};
+    form.onsubmit=event=>{event.preventDefault();finish(form.elements.pin.value);};
+    $('#authorize-cancel').onclick=()=>finish(null);
+    dialog.oncancel=event=>{event.preventDefault();finish(null);};dialog.showModal();
+  });
+}
+async function downloadBackup() {
+  const snapshot=await database.read();
+  download(`festkasse-sicherung-${localDay(new Date())}.json`,JSON.stringify(snapshot,null,2),'application/json');
 }
 function openProduct(id) {
   const form = $('#product-form'); form.reset(); $('#form-error').textContent = '';
@@ -135,6 +175,14 @@ document.addEventListener('click', async event => {
       finally { busy=false; render(); }
     }
     if (b.id==='new-product') openProduct();
+    if (b.id==='configure-pin') await openPinSettings();
+    if (b.dataset.reset) await openReset(b.dataset.reset);
+    if (b.id==='pin-close' && !pinSubmitting) { $('#pin-dialog').close();$('#pin-form').reset(); }
+    if (b.id==='reset-close' && !resetSubmitting) { $('#reset-dialog').close();$('#reset-form').reset(); }
+    if (b.id==='reset-backup') {
+      try { await downloadBackup();$('#reset-backup-status').textContent='Sicherung zum Download erstellt. Bitte prüfen, ob die Datei gespeichert wurde.'; }
+      catch(error){$('#reset-error').textContent=`Sicherung fehlgeschlagen: ${error.message}`;}
+    }
     if (b.dataset.edit) openProduct(b.dataset.edit);
     if (b.id==='close-dialog') $('#product-dialog').close();
     if (b.dataset.cancel) {
@@ -143,7 +191,7 @@ document.addEventListener('click', async event => {
         await save(()=>database.cancelSale(sale.id)); if(await refreshAfterSave())notify('Verkauf storniert.');
       }
     }
-    if (b.id==='backup') { state=await database.read(); download(`festkasse-sicherung-${localDay(new Date())}.json`,JSON.stringify(state,null,2),'application/json'); notify('Sicherung zum Herunterladen erstellt.'); }
+    if (b.id==='backup') { await downloadBackup();notify('Sicherung zum Herunterladen erstellt.'); }
     if (b.id==='restore') $('#backup-file').click();
     if (b.id==='export-csv') {
       state=await database.read(); const s=statistics(state.sales,dayFilter,productFilter);
@@ -162,7 +210,9 @@ document.addEventListener('change', async event => {
       if(el.files[0].size>20_000_000) throw new Error('Die Datei ist zu groß (maximal 20 MB).');
       const data=validateState(JSON.parse(await el.files[0].text()));
       if(await confirmAction(`Sicherung mit ${data.products.length} Produkten und ${data.sales.length} Verkäufen wiederherstellen? Die aktuellen Daten auf diesem Gerät und der Warenkorb werden ERSETZT. Lade vorher eine Sicherung herunter.`)) {
-        await save(()=>database.restore(data));cart=[];productFilter='';if(await refreshAfterSave())notify('Sicherung wiederhergestellt.');
+        let pin;
+        if((await database.adminStatus()).configured){pin=await requestAdminPin();if(pin===null){el.value='';return;}}
+        await save(()=>database.restore(data,pin));cart=[];productFilter='';if(await refreshAfterSave())notify('Sicherung wiederhergestellt.');
       }
     }catch(error){notify(`Wiederherstellung fehlgeschlagen: ${error.message}`,true);}
     el.value='';
@@ -178,6 +228,34 @@ $('#product-form').addEventListener('submit',async event=>{
     $('#product-dialog').close();if(await refreshAfterSave())notify('Produkt gespeichert.');
   }catch(error){$('#form-error').textContent=`Nicht gespeichert: ${error.message}`;}finally{button.disabled=false;}
 });
+$('#pin-form').addEventListener('submit',async event=>{
+  event.preventDefault();if(pinSubmitting)return;
+  const form=event.target;
+  if(form.elements.newPin.value!==form.elements.repeatPin.value){$('#pin-error').textContent='Die beiden neuen PIN-Eingaben stimmen nicht überein.';return;}
+  pinSubmitting=true;setFormPending(form,true);$('#pin-error').textContent='';
+  try {
+    await save(()=>database.setAdminPin(form.elements.newPin.value,form.elements.current.value));
+    $('#pin-dialog').close();form.reset();if(await refreshAfterSave())notify('Admin-PIN gespeichert.');
+  }catch(error){$('#pin-error').textContent=error.message;form.elements.current.value='';}
+  finally{pinSubmitting=false;setFormPending(form,false);}
+});
+$('#reset-form').addEventListener('submit',async event=>{
+  event.preventDefault();if(resetSubmitting||busy)return;
+  const form=event.target;
+  if(!form.elements.acknowledge.checked){$('#reset-error').textContent='Bitte das endgültige Löschen bestätigen.';return;}
+  resetSubmitting=true;busy=true;setFormPending(form,true);$('#reset-error').textContent='';
+  try {
+    const pin=form.elements.pin.value;
+    await save(()=>resetMode==='all'?database.resetAll(pin):database.resetBookings(pin));
+    cart=[];productFilter='';dayFilter=localDay(new Date());
+    $('#reset-dialog').close();form.reset();
+    page=resetMode==='all'?'kasse':'statistik';location.hash=page;
+    if(await refreshAfterSave())notify(resetMode==='all'?'Kasse zurückgesetzt. Drei Startprodukte sind angelegt; die Admin-PIN bleibt erhalten.':'Buchungen entfernt. Deine Produkte bleiben erhalten.');
+  }catch(error){$('#reset-error').textContent=error.message;form.elements.pin.value='';}
+  finally{resetSubmitting=false;busy=false;setFormPending(form,false);if(!$('#reset-dialog').open)render();}
+});
+$('#pin-dialog').addEventListener('cancel',event=>{if(pinSubmitting)event.preventDefault();else $('#pin-form').reset();});
+$('#reset-dialog').addEventListener('cancel',event=>{if(resetSubmitting)event.preventDefault();else $('#reset-form').reset();});
 window.addEventListener('hashchange',()=>{const target=location.hash.slice(1);if(state && ['kasse','statistik','einstellungen'].includes(target)){page=target;render();checkOffline();}});
 function syncDatabase() { if(state) refresh().catch(error=>notify(`Datenbank konnte nicht gelesen werden: ${error.message}`,true)); }
 if(dataChannel) dataChannel.onmessage=syncDatabase;
@@ -191,7 +269,7 @@ async function checkOffline(){const note=$('#offline-note');if(!note)return;try{
 try {
   $('#main').innerHTML='<section class="panel" role="status">Lokale Datenbank wird geöffnet …</section>';
   const migration=await database.initialize();
-  state=await database.read();
+  [state,admin]=await Promise.all([database.read(),database.adminStatus()]);
   const target=location.hash.slice(1);if(['kasse','statistik','einstellungen'].includes(target))page=target;
   render();connection();
   if(migration?.migrated)notify('Vorhandene Produkte und Buchungen wurden in die lokale Datenbank übernommen.');
