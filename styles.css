@@ -21,3 +21,14 @@
 .product.no-symbol{display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding-bottom:40px}.product.no-symbol .product-name{font-size:24px;margin-bottom:14px}.product.no-symbol .product-price{font-size:22px}.no-symbol-choice{font-size:15px;font-weight:650;color:#62766a}.tiny-symbol:empty{display:none}
 
 .metric.payout{background:#fcf1ec;border-color:#ecd7cf;color:#8d483c}.count-cards{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:-8px}.count-cards .metric{padding:18px 24px}.count-cards .metric:first-child{background:#fff;border-color:var(--line);color:#203d36}.count-cards .metric strong{font-size:26px;margin:8px 0}.payment-note{font-size:12px;margin:-8px 0 24px}@media(max-width:680px){.count-cards .metric{padding:14px}.count-cards .metric strong{font-size:23px}}
+
+/* Keep native date controls and long product options inside their grid tracks on iPad. */
+.panel.stat-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:end;gap:16px}
+.stat-filters>label{min-width:0;min-inline-size:0;max-width:100%;max-inline-size:100%}
+.stat-filters input,.stat-filters select{display:block;width:100%;inline-size:100%;min-width:0;min-inline-size:0;max-width:100%;max-inline-size:100%;height:48px;box-sizing:border-box}
+.stat-filters input[type=date]{appearance:none;-webkit-appearance:none;text-align:left}
+.stat-filters input[type=date]::-webkit-date-and-time-value{min-width:0;text-align:left}
+.stat-filters input[type=date]::-webkit-datetime-edit{padding:0;min-width:0}
+.stat-filters>#export-csv{grid-column:1/-1;justify-self:end;min-width:0;max-width:100%;white-space:normal}
+@media(min-width:1200px){.panel.stat-filters{grid-template-columns:repeat(3,minmax(0,1fr)) auto}.stat-filters>#export-csv{grid-column:auto}}
+@media(max-width:900px){.panel.stat-filters{grid-template-columns:minmax(0,1fr);gap:14px}.stat-filters>#export-csv{justify-self:stretch;width:100%}}
