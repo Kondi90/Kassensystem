@@ -1,5 +1,6 @@
 import { money, localDay, parsePrice, total, makeSale, statistics, validateState } from './model.js';
 import { createStorage, LEGACY_KEY } from './storage.js';
+import { formatBytes, summarizeData, estimateStorage } from './usage.js';
 
 const database = createStorage();
 let dataChannel;
@@ -7,7 +8,12 @@ try { dataChannel = new BroadcastChannel('montessori-festkasse-database'); } cat
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function symbol(value) {
+  if(value==='none')return '';
+  if(/^nummer-[123]$/.test(value))return `<svg viewBox="0 0 64 64" class="wine-symbol" aria-hidden="true"><rect x="5" y="5" width="54" height="54" rx="15" fill="${{'nummer-1':'#3989b5','nummer-2':'#25885b','nummer-3':'#9b68a3'}[value]}"/><text x="32" y="46" text-anchor="middle" font-family="Arial,sans-serif" font-size="40" font-weight="bold" fill="white">${value.slice(-1)}</text></svg>`;
   const drawings = {
+    plaetzchen: '<ellipse cx="32" cy="45" rx="28" ry="14" fill="#e7edf2"/><ellipse cx="32" cy="43" rx="23" ry="10" fill="#fffaf0"/><path d="m20 14 4 9 10 1-7 7 2 10-9-5-9 5 2-10-7-7 10-1Z" fill="#d99d52" stroke="#b97a35" stroke-width="2"/><circle cx="43" cy="35" r="12" fill="#e9b86f" stroke="#be8644" stroke-width="2"/><circle cx="43" cy="35" r="5" fill="#ba4c43"/><circle cx="30" cy="45" r="10" fill="#dcaa65" stroke="#b7803e" stroke-width="2"/><path d="m25 43 3 3m5-6 2 3m-3 6 2 1" stroke="#825537" stroke-width="2.5" stroke-linecap="round"/>',
+    flasche: '<path d="M26 8h12v12c0 6 10 9 10 17v19q0 5-5 5H21q-5 0-5-5V37c0-8 10-11 10-17Z" fill="#bee0cf" stroke="#4e9379" stroke-width="2"/><path d="M20 38h24v17q0 2-2 2H22q-2 0-2-2Z" fill="#e9b64b"/><rect x="16" y="33" width="32" height="15" rx="2" fill="#fff6de"/><circle cx="32" cy="40" r="4" fill="#e1a437"/><rect x="24" y="3" width="16" height="9" rx="3" fill="#4e9379"/><path d="M22 28v7" stroke="#f5fff8" stroke-width="3" stroke-linecap="round"/>',
+    kiachl: '<ellipse cx="32" cy="49" rx="29" ry="11" fill="#e8e7dd"/><path d="M5 34C3 18 16 9 31 10c17-2 30 7 28 24 2 15-11 24-27 23C16 59 3 49 5 34Z" fill="#d99639" stroke="#b77326" stroke-width="2"/><path d="M13 32c0-9 8-15 19-15s20 6 19 16c1 10-9 16-19 16s-20-6-19-17Z" fill="#f1c879"/><ellipse cx="32" cy="32" rx="13" ry="10" fill="#e5ab55"/><path d="m14 26 3 1m7-10 2 2m14-1 2 1m9 12 2 1m-9 14 2-1m-21 3 2 1m-13-9 2 1m13-12 2 1m6 5 2-1" stroke="#fff8e8" stroke-width="3" stroke-linecap="round"/>',
     stockbrot: '<g transform="rotate(35 32 32)"><path d="M32 8v52" stroke="#946338" stroke-width="5" stroke-linecap="round"/><path d="M26 11q-8 3-6 11l3 18q1 8 10 7l6-1q7-2 5-10l-4-19q-2-9-14-6Z" fill="#e8b669" stroke="#b77836" stroke-width="2"/><path d="m22 20 19-4M23 28l19-5M24 36l19-5M27 43l17-5" stroke="#bd7e3d" stroke-width="4" stroke-linecap="round"/><path d="m25 16 6-2" stroke="#ffe2a5" stroke-width="3" stroke-linecap="round"/></g>',
     stock: '<path d="m13 57 37-47M34 31l-2-14M40 24l15-4" fill="none" stroke="#946338" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><path d="m16 53 14-18" stroke="#c69460" stroke-width="2" stroke-linecap="round"/>',
     bratwurstsemmel: '<g transform="rotate(-24 32 32)"><rect x="6" y="16" width="52" height="34" rx="17" fill="#e5ac58" stroke="#c78b39" stroke-width="2"/><path d="M18 19q-8 5-7 13M45 43l5-4" fill="none" stroke="#ffe1a1" stroke-width="3" stroke-linecap="round"/><rect x="8" y="27" width="48" height="13" rx="6.5" fill="#9e4d29" stroke="#7b3e24" stroke-width="2"/><path d="m19 29 3 7m7-7 3 7m7-7 3 7" stroke="#c57943" stroke-width="2"/><path d="m14 32 7-2 6 5 7-5 6 5 9-3" fill="none" stroke="#f8d452" stroke-width="2.5" stroke-linecap="round"/></g>',
@@ -20,17 +26,18 @@ function symbol(value) {
 }
 const productSymbols = [
   ['🍰','Kuchen'],['🥨','Brezel'],['🧇','Waffel'],['☕','Kaffee'],['🧃','Saft'],['💧','Wasser'],
-  ['🌭','Würstchen'],['bratwurstsemmel','Bratwurstsemmel'],['stockbrot','Stockbrot'],['stock','Stock / Stockpfand'],['bier','Bier'],['🍕','Pizza'],['🍟','Pommes'],['🍪','Plätzchen'],['🥤','Becherpfand'],['↩️','Pfand zurück'],
+  ['🌭','Würstchen'],['bratwurstsemmel','Bratwurstsemmel'],['stockbrot','Stockbrot'],['stock','Stock / Stockpfand'],['bier','Bier'],['flasche','Getränkeflasche'],['kiachl','Kiachl'],['🍕','Pizza'],['🍟','Pommes'],['plaetzchen','Plätzchen'],['🍪','Keks'],['🥤','Becherpfand'],['↩️','Pfand zurück'],
   ['gluehwein-hell','Glühwein hell'],['gluehwein-rose','Glühwein rosé'],['gluehwein-dunkel','Glühwein dunkel'],
-  ['🍦','Eis'],['🥗','Salat'],['🎟️','Eintritt'],['🎁','Geschenk'],['🍽️','Essen']
+  ['🍦','Eis'],['🥗','Salat'],['🎟️','Eintritt'],['🎁','Geschenk'],['🍽️','Essen'],['⭐','Stern'],['❤️','Herz'],['🔵','Kreis'],['nummer-1','Nummer 1'],['nummer-2','Nummer 2'],['nummer-3','Nummer 3'],['none','Kein Symbol']
 ];
 function renderSymbolPicker() {
   const selected = $('#product-form').elements.emoji.value;
   const choices = productSymbols.some(([value])=>value===selected) ? productSymbols : [...productSymbols,[selected,'Eigenes Symbol']];
-  $('#symbol-picker').innerHTML = choices.map(([value,label])=>`<button type="button" class="symbol-choice" data-symbol="${esc(value)}" aria-label="${esc(label)}" aria-pressed="${value===selected}" title="${esc(label)}">${symbol(value)}</button>`).join('');
+  $('#symbol-picker').innerHTML = choices.map(([value,label])=>`<button type="button" class="symbol-choice" data-symbol="${esc(value)}" aria-label="${esc(label)}" aria-pressed="${value===selected}" title="${esc(label)}">${value==='none'?'<span class="no-symbol-choice">Ohne</span>':symbol(value)}</button>`).join('');
 }
 let state, page = 'kasse', cart = [], dayFilter = localDay(new Date()), productFilter = '', busy = false, toastTimer;
 let admin = { configured: false }, resetMode = 'bookings', resetSubmitting = false, pinSubmitting = false;
+let usageRequest = 0;
 function confirmAction(message) {
   return new Promise(resolve=>{
     const dialog=$('#confirm-dialog'); $('#confirm-message').textContent=message;
@@ -61,6 +68,14 @@ async function refreshAfterSave() {
 function render() {
   document.querySelectorAll('[data-page]').forEach(b => { b.classList.toggle('active', b.dataset.page === page); if (b.dataset.page === page) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
   $('#main').innerHTML = page === 'kasse' ? cashPage() : page === 'statistik' ? statsPage() : settingsPage();
+  if(page==='einstellungen')updateStorageUsage();else usageRequest++;
+}
+async function updateStorageUsage() {
+  const request=++usageRequest;
+  const estimate=await estimateStorage();
+  if(request!==usageRequest || page!=='einstellungen')return;
+  const target=$('#device-storage');if(!target)return;
+  target.innerHTML=`<span class="usage-label">Belegter Website-Speicher</span><strong>${estimate.usage===null?'Nicht verfügbar':'ca. '+formatBytes(estimate.usage)}</strong><small>${estimate.usage===null?'Dieser Browser stellt keine Speicherschätzung bereit. Die Sicherungsgröße wird daneben angezeigt.':'Browser-Schätzung inklusive Datenbank und Offline-Dateien.'}</small>${estimate.quota===null?'':`<small>Geschätztes Speicherbudget: ${formatBytes(estimate.quota)}</small>`}`;
 }
 function cashPage() {
   const products = state.products.filter(p => p.active);
@@ -69,7 +84,7 @@ function cashPage() {
   <div class="cash-layout"><section aria-label="Produkte">
     <div class="products">${products.map(p => {
       const n = cart.find(l => l.id===p.id)?.quantity || 0;
-      return `<button class="product ${p.category==='Getränke'?'drink':''}" data-add="${esc(p.id)}" aria-label="${esc(p.name)}, ${money(p.price)}, hinzufügen"><span class="product-symbol" aria-hidden="true">${symbol(p.emoji)}</span>${n ? `<span class="count-badge">${n}</span>`:''}<span class="product-name">${esc(p.name)}</span><span class="product-price">${money(p.price)}</span><span class="product-add" aria-hidden="true">+</span></button>`;
+      return `<button class="product ${p.category==='Getränke'?'drink':''} ${p.emoji==='none'?'no-symbol':''}" data-add="${esc(p.id)}" aria-label="${esc(p.name)}, ${money(p.price)}, hinzufügen">${p.emoji==='none'?'':`<span class="product-symbol" aria-hidden="true">${symbol(p.emoji)}</span>`}${n ? `<span class="count-badge">${n}</span>`:''}<span class="product-name">${esc(p.name)}</span><span class="product-price">${money(p.price)}</span><span class="product-add" aria-hidden="true">+</span></button>`;
     }).join('')}</div>${!products.length ? '<div class="panel empty">Noch keine aktiven Produkte. Lege sie unter Einstellungen an.</div>' : ''}
   </section><aside class="cart" aria-label="Aktueller Verkauf"><div class="cart-heading"><h2>Aktueller Verkauf</h2><span class="tag">${count} Artikel</span></div>
     <div class="cart-lines">${cart.length ? cart.map(l => `<div class="cart-line"><div><div class="cart-line-name">${esc(l.name)}</div><div class="line-price">${money(l.price)} / Stück · ${money(l.price*l.quantity)}</div></div><div class="quantity"><button data-minus="${esc(l.id)}" aria-label="Ein ${esc(l.name)} entfernen">−</button><span>${l.quantity}</span><button data-plus="${esc(l.id)}" aria-label="Ein ${esc(l.name)} hinzufügen">+</button></div></div>`).join('') : '<div class="empty"><span class="empty-symbol" aria-hidden="true">♧</span>Hier ist Platz für Leckeres.<br>Wähle links die ersten Artikel aus.</div>'}</div>
@@ -91,9 +106,11 @@ function statsPage() {
     <section class="panel"><div class="section-heading"><h2>Letzte Verkäufe</h2><span class="muted" style="font-size:12px">Bis zu 30 · Stornos bleiben sichtbar</span></div>${relevant.length ? relevant.slice(0,30).map(s => `<div class="receipt ${s.cancelledAt?'cancelled':''}"><div><strong>${timeFormat.format(new Date(s.timestamp))} Uhr</strong><span class="muted"> · ${dateFormat.format(new Date(s.timestamp))}</span><div class="receipt-details">${s.items.map(i => `${i.quantity} × ${esc(i.name)}`).join(' · ')}</div>${s.cancelledAt ? '<span class="danger">Storniert · nicht im Umsatz enthalten</span>':''}</div><div class="right"><strong>${money(s.total)}</strong><br>${s.cancelledAt ? '' : `<button class="text-button danger" data-cancel="${esc(s.id)}">Stornieren</button>`}</div></div>`).join('') : '<p class="sub">Noch keine passenden Verkäufe.</p>'}<p class="sub" style="margin-top:16px">${productFilter?'Die Beträge der einzelnen Verkäufe zeigen den ganzen Warenkorb. Die Kennzahlen oben zählen nur das gewählte Produkt.':'Stornierte Verkäufe zählen nicht in den Kennzahlen.'}</p></section>`;
 }
 function settingsPage() {
+  const usage=summarizeData(state);
   return `
     <div class="notice">Die Startprodukte und Preise sind Beispiele. Für Pfand zwei Produkte anlegen, z. B. „Becherpfand“ mit 2,00 € und „Pfand zurück“ mit −2,00 €. Negative Preise werden vom Gesamtbetrag abgezogen. Preisänderungen verändern bereits gebuchte Verkäufe nicht.</div>
     <section class="panel"><div class="section-heading"><h2>Eure Produkte <span class="tag">${state.products.filter(p=>p.active).length} aktiv</span></h2><button class="primary" id="new-product">+ Produkt anlegen</button></div><div class="table-wrap"><table><thead><tr><th>Produkt</th><th>Preis</th><th>Status</th><th></th></tr></thead><tbody>${state.products.map(p => `<tr><td><div class="table-product"><span class="tiny-symbol">${symbol(p.emoji)}</span>${esc(p.name)}</div></td><td>${money(p.price)}</td><td><span class="status-dot ${p.active?'':'inactive'}">${p.active?'Aktiv':'Pausiert'}</span></td><td class="right"><button class="secondary" data-edit="${esc(p.id)}" aria-label="${esc(p.name)} bearbeiten">Bearbeiten</button></td></tr>`).join('')}</tbody></table></div></section>
+    <section class="panel" aria-label="Daten und Speicher"><div class="section-heading"><h2>Daten & Speicher</h2><button class="text-button" id="refresh-storage">↻ Aktualisieren</button></div><div class="usage-grid"><div class="usage-card"><span class="usage-label">Gespeicherte Buchungen</span><strong>${usage.bookings.toLocaleString('de-DE')}</strong><small>${usage.active.toLocaleString('de-DE')} nicht storniert · ${usage.cancelled.toLocaleString('de-DE')} storniert</small><small>Alle Tage, inklusive Rückzahlungen</small></div><div class="usage-card"><span class="usage-label">Größe der Kassensicherung</span><strong>${formatBytes(usage.backupBytes)}</strong><small>Produkte und Buchungen als JSON, ohne PIN und Offline-Dateien.</small><small class="${usage.backupBytes>20_000_000?'danger':''}">${usage.backupBytes>20_000_000?'Diese Sicherung überschreitet die aktuelle Importgrenze von 20 MB.':'Aktuelle Importgrenze: 20 MB'}</small></div><div class="usage-card" id="device-storage" aria-live="polite"><span class="usage-label">Belegter Website-Speicher</span><strong>Wird ermittelt …</strong></div></div><p class="sub usage-note">Die Sicherungsgröße entspricht der heruntergeladenen JSON-Datei. Der Website-Speicher enthält zusätzlich technische Daten; andere Apps unter derselben Domain können mitgezählt werden. Das Speicherbudget ist keine Garantie für tatsächlich freien Gerätespeicher.</p></section>
     <div class="settings-grid"><section class="panel"><h2>Daten sichern</h2><p>Produkte und Buchungen liegen in einer lokalen IndexedDB-Datenbank auf diesem Gerät. Eine Sicherung schützt vor Datenverlust, etwa beim Löschen der Website-Daten. Die Statistik synchronisiert sich nicht mit anderen Geräten. Auch bisherige JSON-Sicherungen lassen sich wiederherstellen.</p><div class="actions"><button class="secondary" id="backup">↓ Sicherung herunterladen</button><button class="text-button" id="restore">Sicherung wiederherstellen</button><input class="hidden" type="file" id="backup-file" accept="application/json,.json"></div></section>
     <section class="panel"><h2>Als App verwenden</h2><p>Auf dem iPad die Kasse in Safari öffnen, auf „Teilen“ tippen und „Zum Home-Bildschirm“ wählen. Nach dem ersten vollständigen Laden kann die App offline genutzt werden.</p><p id="offline-note">Der Offline-Status wird geprüft …</p><p>Vor dem Fest einmal mit Beispielverkäufen auf dem vorgesehenen iPad testen und eine Sicherung anlegen.</p></section></div>
     <section class="panel admin-panel"><div class="section-heading"><h2>Admin-PIN & Zurücksetzen</h2><button class="secondary" id="configure-pin">${admin.configured?'PIN ändern':'Admin-PIN festlegen'}</button></div><p class="sub">${admin.configured?'Die Admin-PIN ist eingerichtet. Zurücksetzen und Wiederherstellen erfordern die PIN.':'Lege zuerst eine eigene Admin-PIN mit 6 bis 12 Ziffern fest, um die Zurücksetzen-Funktionen freizuschalten.'} Kassieren und Sicherungen herunterladen bleiben ohne PIN möglich.</p><div class="reset-options"><div><h3>Buchungen zurücksetzen</h3><p class="sub">Alle Verkäufe und Stornos entfernen. Die Statistik beginnt bei null; Produkte und Preise bleiben erhalten.</p><button class="secondary danger" data-reset="bookings" ${!admin.configured||busy?'disabled':''}>Buchungen zurücksetzen</button></div><div><h3>Kasse vollständig zurücksetzen</h3><p class="sub">Alle Produkte und Buchungen entfernen und die drei Startprodukte Kuchen, Brezel und Kaffee anlegen. Die Admin-PIN bleibt erhalten.</p><button class="secondary danger" data-reset="all" ${!admin.configured||busy?'disabled':''}>Kasse vollständig zurücksetzen</button></div></div><p class="sub admin-note">Vor beiden Aktionen kannst du eine Sicherung herunterladen. Die PIN gilt nur auf diesem Gerät und ist nicht Teil der Sicherung. Sie ist ein lokaler Bedienungsschutz und verschlüsselt die Datenbank nicht.</p></section>`;
@@ -175,6 +192,7 @@ document.addEventListener('click', async event => {
       finally { busy=false; render(); }
     }
     if (b.id==='new-product') openProduct();
+    if (b.id==='refresh-storage') await refresh();
     if (b.id==='configure-pin') await openPinSettings();
     if (b.dataset.reset) await openReset(b.dataset.reset);
     if (b.id==='pin-close' && !pinSubmitting) { $('#pin-dialog').close();$('#pin-form').reset(); }
