@@ -24,11 +24,16 @@ export function makeSale(lines, id, timestamp) {
 export function statistics(sales, day = '', productId = '') {
   const matchingSales = sales.filter(s => !s.cancelledAt && (!day || localDay(s.timestamp) === day));
   const rows = new Map();
-  let revenue = 0, quantity = 0, transactions = 0;
+  let revenue = 0, quantity = 0, transactions = 0, income = 0, payouts = 0;
+  let positiveTransactions = 0, negativeTransactions = 0, zeroTransactions = 0;
   for (const sale of matchingSales) {
     const items = sale.items.filter(i => !productId || i.id === productId);
     if (!items.length) continue;
     transactions++;
+    const amount = total(items);
+    if(amount>0){income+=amount;positiveTransactions++;}
+    else if(amount<0){payouts-=amount;negativeTransactions++;}
+    else zeroTransactions++;
     for (const item of items) {
       const row = rows.get(item.id) || { id: item.id, name: item.name, emoji: item.emoji, quantity: 0, revenue: 0 };
       row.quantity += item.quantity; row.revenue += item.quantity * item.price;
@@ -36,7 +41,8 @@ export function statistics(sales, day = '', productId = '') {
       rows.set(item.id, row);
     }
   }
-  return { revenue, quantity, transactions, rows: [...rows.values()].sort((a,b) => b.revenue-a.revenue) };
+  return { revenue, quantity, transactions, income, payouts, positiveTransactions, negativeTransactions, zeroTransactions,
+    rows: [...rows.values()].sort((a,b) => b.revenue-a.revenue) };
 }
 export function validateState(data) {
   if (!data || data.version !== 1 || !Array.isArray(data.products) || !Array.isArray(data.sales)) throw new Error('Das ist keine gültige Festkassen-Sicherung.');
