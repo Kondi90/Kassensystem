@@ -12,8 +12,7 @@ export function parsePrice(value) {
 export function initialState() {
   return { version: 1, products: [
     ['cake','Kuchen','Essen',250,'🍰'], ['pretzel','Brezel','Essen',150,'🥨'],
-    ['waffle','Waffel','Essen',300,'🧇'], ['coffee','Kaffee','Getränke',200,'☕'],
-    ['juice','Apfelschorle','Getränke',250,'🧃'], ['water','Wasser','Getränke',150,'💧']
+    ['coffee','Kaffee','Getränke',200,'☕']
   ].map(([id,name,category,price,emoji]) => ({ id,name,category,price,emoji,active:true })), sales: [] };
 }
 export function total(lines) { return lines.reduce((sum, line) => sum + line.price * line.quantity, 0); }

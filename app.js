@@ -1,6 +1,9 @@
-import { money, localDay, parsePrice, initialState, total, makeSale, statistics, validateState } from './model.js';
+import { money, localDay, parsePrice, total, makeSale, statistics, validateState } from './model.js';
+import { createStorage, LEGACY_KEY } from './storage.js';
 
-const KEY = 'montessori-festkasse-v1';
+const database = createStorage();
+let dataChannel;
+try { dataChannel = new BroadcastChannel('montessori-festkasse-database'); } catch { /* Focus refresh supports browsers without BroadcastChannel. */ }
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function symbol(value) {
@@ -37,15 +40,21 @@ function confirmAction(message) {
 }
 const dateFormat = new Intl.DateTimeFormat('de-DE', {day:'numeric',month:'long',year:'numeric'});
 const timeFormat = new Intl.DateTimeFormat('de-DE', {hour:'2-digit',minute:'2-digit'});
-function read() { const raw = localStorage.getItem(KEY); return raw ? validateState(JSON.parse(raw)) : initialState(); }
 function notify(message, error = false) {
   $('#toast').textContent = message; $('#toast').className = `visible${error ? ' error' : ''}`;
   clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').className = '', error ? 9000 : 4000);
 }
-async function mutate(change) {
-  const perform = () => { const next = read(); change(next); validateState(next); localStorage.setItem(KEY, JSON.stringify(next)); state = next; };
-  // Serialize writes across tabs where the browser supports Web Locks.
-  if (navigator.locks) await navigator.locks.request(KEY, perform); else perform();
+async function save(operation) {
+  await operation();
+  try { dataChannel?.postMessage('changed'); } catch { /* A failed notification must never make a committed booking look unsuccessful. */ }
+}
+async function refresh() {
+  state = await database.read();
+  render(); checkOffline();
+}
+async function refreshAfterSave() {
+  try { await refresh(); return true; }
+  catch { notify('Die Änderung ist gespeichert. Die Ansicht konnte nicht aktualisiert werden; bitte die Kasse neu öffnen.',true); return false; }
 }
 function render() {
   document.querySelectorAll('[data-page]').forEach(b => { b.classList.toggle('active', b.dataset.page === page); if (b.dataset.page === page) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
@@ -83,7 +92,7 @@ function settingsPage() {
   return `
     <div class="notice">Die Startprodukte und Preise sind Beispiele. Für Pfand zwei Produkte anlegen, z. B. „Becherpfand“ mit 2,00 € und „Pfand zurück“ mit −2,00 €. Negative Preise werden vom Gesamtbetrag abgezogen. Preisänderungen verändern bereits gebuchte Verkäufe nicht.</div>
     <section class="panel"><div class="section-heading"><h2>Eure Produkte <span class="tag">${state.products.filter(p=>p.active).length} aktiv</span></h2><button class="primary" id="new-product">+ Produkt anlegen</button></div><div class="table-wrap"><table><thead><tr><th>Produkt</th><th>Preis</th><th>Status</th><th></th></tr></thead><tbody>${state.products.map(p => `<tr><td><div class="table-product"><span class="tiny-symbol">${symbol(p.emoji)}</span>${esc(p.name)}</div></td><td>${money(p.price)}</td><td><span class="status-dot ${p.active?'':'inactive'}">${p.active?'Aktiv':'Pausiert'}</span></td><td class="right"><button class="secondary" data-edit="${esc(p.id)}" aria-label="${esc(p.name)} bearbeiten">Bearbeiten</button></td></tr>`).join('')}</tbody></table></div></section>
-    <div class="settings-grid"><section class="panel"><h2>Daten sichern</h2><p>Produkte und Verkäufe werden nur in diesem Browser auf diesem Gerät gespeichert. Eine Sicherung schützt vor Datenverlust, etwa beim Löschen der Browserdaten. Die Statistik synchronisiert sich nicht mit anderen Geräten.</p><div class="actions"><button class="secondary" id="backup">↓ Sicherung herunterladen</button><button class="text-button" id="restore">Sicherung wiederherstellen</button><input class="hidden" type="file" id="backup-file" accept="application/json,.json"></div></section>
+    <div class="settings-grid"><section class="panel"><h2>Daten sichern</h2><p>Produkte und Buchungen liegen in einer lokalen IndexedDB-Datenbank auf diesem Gerät. Eine Sicherung schützt vor Datenverlust, etwa beim Löschen der Website-Daten. Die Statistik synchronisiert sich nicht mit anderen Geräten. Auch bisherige JSON-Sicherungen lassen sich wiederherstellen.</p><div class="actions"><button class="secondary" id="backup">↓ Sicherung herunterladen</button><button class="text-button" id="restore">Sicherung wiederherstellen</button><input class="hidden" type="file" id="backup-file" accept="application/json,.json"></div></section>
     <section class="panel"><h2>Als App verwenden</h2><p>Auf dem iPad die Kasse in Safari öffnen, auf „Teilen“ tippen und „Zum Home-Bildschirm“ wählen. Nach dem ersten vollständigen Laden kann die App offline genutzt werden.</p><p id="offline-note">Der Offline-Status wird geprüft …</p><p>Vor dem Fest einmal mit Beispielverkäufen auf dem vorgesehenen iPad testen und eine Sicherung anlegen.</p></section></div>`;
 }
 function openProduct(id) {
@@ -104,9 +113,10 @@ function download(filename,content,type) {
 function csvCell(value) { let s = String(value); if (/^[=+@\-\t\r]/.test(s)) s="'"+s; return '"'+s.replaceAll('"','""')+'"'; }
 document.addEventListener('click', async event => {
   const b = event.target.closest('button'); if (!b || b.disabled) return;
+  if (!state) return;
   try {
     if (b.dataset.symbol) { $('#product-form').elements.emoji.value=b.dataset.symbol; renderSymbolPicker(); return; }
-    if (b.dataset.page) { page=b.dataset.page; location.hash=page; render(); checkOffline(); return; }
+    if (b.dataset.page) { page=b.dataset.page; location.hash=page; await refresh(); return; }
     if (busy && (b.dataset.add || b.dataset.minus || b.dataset.plus)) return;
     const id = b.dataset.add || b.dataset.plus || b.dataset.minus;
     if (id) {
@@ -121,7 +131,7 @@ document.addEventListener('click', async event => {
       busy=true;
       const sale=makeSale(cart,crypto.randomUUID(),new Date().toISOString());
       render();
-      try { await mutate(s=>s.sales.push(sale)); cart=[]; notify(`${sale.total<0?'Rückzahlung von '+money(-sale.total):money(sale.total)} gebucht. Bereit für den nächsten Verkauf.`); }
+      try { await save(()=>database.addSale(sale)); cart=[]; if(await refreshAfterSave())notify(`${sale.total<0?'Rückzahlung von '+money(-sale.total):money(sale.total)} gebucht. Bereit für den nächsten Verkauf.`); }
       finally { busy=false; render(); }
     }
     if (b.id==='new-product') openProduct();
@@ -130,13 +140,13 @@ document.addEventListener('click', async event => {
     if (b.dataset.cancel) {
       const sale=state.sales.find(s=>s.id===b.dataset.cancel);
       if (sale && await confirmAction(`Verkauf über ${money(sale.total)} stornieren? Er bleibt im Verlauf sichtbar und wird aus dem Umsatz herausgerechnet.`)) {
-        await mutate(s=>{ const target=s.sales.find(x=>x.id===sale.id); if(target) target.cancelledAt=new Date().toISOString(); }); render();notify('Verkauf storniert.');
+        await save(()=>database.cancelSale(sale.id)); if(await refreshAfterSave())notify('Verkauf storniert.');
       }
     }
-    if (b.id==='backup') { state=read(); download(`festkasse-sicherung-${localDay(new Date())}.json`,JSON.stringify(state,null,2),'application/json'); notify('Sicherung zum Herunterladen erstellt.'); }
+    if (b.id==='backup') { state=await database.read(); download(`festkasse-sicherung-${localDay(new Date())}.json`,JSON.stringify(state,null,2),'application/json'); notify('Sicherung zum Herunterladen erstellt.'); }
     if (b.id==='restore') $('#backup-file').click();
     if (b.id==='export-csv') {
-      state=read(); const s=statistics(state.sales,dayFilter,productFilter);
+      state=await database.read(); const s=statistics(state.sales,dayFilter,productFilter);
       const rows=[['Zeitraum','Produkt','Stück','Umsatz EUR'],...s.rows.map(r=>[dayFilter||'Alle Tage',r.name,r.quantity,(r.revenue/100).toFixed(2).replace('.',',')]),[dayFilter||'Alle Tage','Gesamt',s.quantity,(s.revenue/100).toFixed(2).replace('.',',')]];
       download(`festkasse-statistik-${dayFilter||'gesamt'}.csv`,'\ufeff'+rows.map(r=>r.map(csvCell).join(';')).join('\r\n'),'text/csv;charset=utf-8');
     }
@@ -152,7 +162,7 @@ document.addEventListener('change', async event => {
       if(el.files[0].size>20_000_000) throw new Error('Die Datei ist zu groß (maximal 20 MB).');
       const data=validateState(JSON.parse(await el.files[0].text()));
       if(await confirmAction(`Sicherung mit ${data.products.length} Produkten und ${data.sales.length} Verkäufen wiederherstellen? Die aktuellen Daten auf diesem Gerät und der Warenkorb werden ERSETZT. Lade vorher eine Sicherung herunter.`)) {
-        await mutate(s=>Object.assign(s,data));cart=[];productFilter='';render();checkOffline();notify('Sicherung wiederhergestellt.');
+        await save(()=>database.restore(data));cart=[];productFilter='';if(await refreshAfterSave())notify('Sicherung wiederhergestellt.');
       }
     }catch(error){notify(`Wiederherstellung fehlgeschlagen: ${error.message}`,true);}
     el.value='';
@@ -164,23 +174,27 @@ $('#product-form').addEventListener('submit',async event=>{
   try {
     const product={id:form.elements.id.value||crypto.randomUUID(),name:form.elements.name.value.trim(),price:parsePrice(form.elements.price.value),emoji:form.elements.emoji.value,active:form.elements.active.checked};
     if(!product.name) throw new Error('Bitte den Produktnamen ausfüllen.');
-    // Preserve legacy metadata so existing backups and products remain compatible.
-    await mutate(s=>{const index=s.products.findIndex(p=>p.id===product.id);if(index<0)s.products.push({...product,category:'Sonstiges'});else s.products[index]={...s.products[index],...product};});
-    $('#product-dialog').close();render();checkOffline();notify('Produkt gespeichert.');
+    await save(()=>database.saveProduct(product));
+    $('#product-dialog').close();if(await refreshAfterSave())notify('Produkt gespeichert.');
   }catch(error){$('#form-error').textContent=`Nicht gespeichert: ${error.message}`;}finally{button.disabled=false;}
 });
-window.addEventListener('hashchange',()=>{const target=location.hash.slice(1);if(['kasse','statistik','einstellungen'].includes(target)){page=target;render();checkOffline();}});
-window.addEventListener('storage',event=>{if(event.key===KEY){try{state=read();render();checkOffline();}catch{notify('Daten wurden in einem anderen Fenster geändert und konnten nicht gelesen werden.',true);}}});
+window.addEventListener('hashchange',()=>{const target=location.hash.slice(1);if(state && ['kasse','statistik','einstellungen'].includes(target)){page=target;render();checkOffline();}});
+function syncDatabase() { if(state) refresh().catch(error=>notify(`Datenbank konnte nicht gelesen werden: ${error.message}`,true)); }
+if(dataChannel) dataChannel.onmessage=syncDatabase;
+window.addEventListener('focus',syncDatabase);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncDatabase();});
+window.addEventListener('storage',event=>{if(event.key===LEGACY_KEY)notify('Eine alte Kassenversion hat den bisherigen Speicher geändert. Bitte alte Kassenfenster schließen. Bei Bedarf deren Daten separat sichern.',true);});
 window.addEventListener('beforeunload',event=>{if(cart.length){event.preventDefault();event.returnValue='';}});
 function connection(){ $('#connection').textContent=navigator.onLine?'● Auf diesem Gerät':'● Offline'; }
 window.addEventListener('online',connection);window.addEventListener('offline',connection);
 async function checkOffline(){const note=$('#offline-note');if(!note)return;try{const r=await navigator.serviceWorker?.getRegistration();note.textContent=r?.active?'✓ Offline-Version auf diesem Gerät vorbereitet. Bitte einmal im Flugmodus testen.':'Offline-Version wird beim ersten Öffnen vorbereitet. Zum Abschluss die App erneut öffnen.';}catch{note.textContent='Offline-Vorbereitung konnte nicht geprüft werden.';}}
 try {
-  state=read();
-  // Check storage availability before accepting any sales. Never silently replace unreadable data.
-  if(!localStorage.getItem(KEY)) localStorage.setItem(KEY,JSON.stringify(state));
+  $('#main').innerHTML='<section class="panel" role="status">Lokale Datenbank wird geöffnet …</section>';
+  const migration=await database.initialize();
+  state=await database.read();
   const target=location.hash.slice(1);if(['kasse','statistik','einstellungen'].includes(target))page=target;
   render();connection();
+  if(migration?.migrated)notify('Vorhandene Produkte und Buchungen wurden in die lokale Datenbank übernommen.');
   if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').then(()=>navigator.serviceWorker.ready).then(checkOffline).catch(()=>notify('Offline-Vorbereitung fehlgeschlagen. Bitte mit Internet erneut öffnen.',true));
   checkOffline();
-}catch(error){$('#main').innerHTML=`<section class="panel"><h1>Speicher nicht verfügbar</h1><p>Die Kasse konnte ihre Daten nicht sicher lesen oder speichern. Bitte verwende einen normalen Browsermodus und prüfe die Speicherberechtigung.</p><p>Vorhandene Daten wurden nicht überschrieben. Lösche keine Browserdaten, wenn hier schon Verkäufe gespeichert waren.</p></section>`;notify(error.message,true);}
+}catch(error){state=null;$('#main').innerHTML=`<section class="panel"><h1>Datenbank nicht verfügbar</h1><p>Die Kasse konnte die lokale Datenbank nicht sicher öffnen. Bitte verwende einen normalen Browsermodus und prüfe die Speicherberechtigung. Schließe gegebenenfalls andere Kassenfenster.</p><p>Vorhandene Daten wurden nicht überschrieben. Lösche keine Website-Daten, wenn hier schon Buchungen gespeichert waren.</p></section>`;notify(error.message,true);}

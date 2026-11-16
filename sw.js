@@ -1,5 +1,5 @@
-const CACHE = 'montessori-festkasse-shell-v7';
-const FILES = ['./','./index.html','./styles.css','./app.js','./model.js','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./logo.png'];
+const CACHE = 'montessori-festkasse-shell-v8';
+const FILES = ['./','./index.html','./styles.css','./app.js','./model.js','./storage.js','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./logo.png'];
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES))));
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('montessori-festkasse-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch', event => {
