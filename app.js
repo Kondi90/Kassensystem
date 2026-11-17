@@ -1,4 +1,4 @@
-import { money, localDay, parsePrice, total, makeSale, statistics, validateState } from './model.js';
+import { money, localDay, parsePrice, total, makeSale, statistics, validateState, calculateChange } from './model.js';
 import { createStorage, LEGACY_KEY } from './storage.js';
 import { formatBytes, summarizeData, estimateStorage } from './usage.js';
 
@@ -39,6 +39,8 @@ function renderSymbolPicker() {
 let state, page = 'kasse', cart = [], dayFilter = localDay(new Date()), productFilter = '', busy = false, toastTimer;
 let admin = { configured: false }, resetMode = 'bookings', resetSubmitting = false, pinSubmitting = false;
 let usageRequest = 0;
+let givenText = '', changeOpen = false;
+function clearCurrentSale() { cart=[];givenText='';changeOpen=false; }
 function confirmAction(message) {
   return new Promise(resolve=>{
     const dialog=$('#confirm-dialog'); $('#confirm-message').textContent=message;
@@ -81,6 +83,7 @@ async function updateStorageUsage() {
 function cashPage() {
   const products = state.products.filter(p => p.active);
   const amount = total(cart), count = cart.reduce((sum,l) => sum+l.quantity,0);
+  const change = calculateChange(amount,givenText);
   return `
   <div class="cash-layout"><section aria-label="Produkte">
     <div class="products">${products.map(p => {
@@ -89,8 +92,24 @@ function cashPage() {
     }).join('')}</div>${!products.length ? '<div class="panel empty">Noch keine aktiven Produkte. Lege sie unter Einstellungen an.</div>' : ''}
   </section><aside class="cart" aria-label="Aktueller Verkauf"><div class="cart-heading"><h2>Aktueller Verkauf</h2><span class="tag">${count} Artikel</span></div>
     <div class="cart-lines">${cart.length ? cart.map(l => `<div class="cart-line"><div><div class="cart-line-name">${esc(l.name)}</div><div class="line-price">${money(l.price)} / Stück · ${money(l.price*l.quantity)}</div></div><div class="quantity"><button data-minus="${esc(l.id)}" aria-label="Ein ${esc(l.name)} entfernen">−</button><span>${l.quantity}</span><button data-plus="${esc(l.id)}" aria-label="Ein ${esc(l.name)} hinzufügen">+</button></div></div>`).join('') : '<div class="empty"><span class="empty-symbol" aria-hidden="true">♧</span>Hier ist Platz für Leckeres.<br>Wähle links die ersten Artikel aus.</div>'}</div>
-    <div class="cart-bottom"><div class="total"><span>${amount<0?'Auszuzahlen':'Gesamtbetrag'}</span><strong aria-live="polite">${money(amount<0?-amount:amount)}</strong></div><button class="primary" id="book" ${!cart.length||busy?'disabled':''}>${busy?'Wird gespeichert …':amount<0?'↩ &nbsp; Rückzahlung buchen':'✓ &nbsp; Verkauf buchen'}</button><button class="text-button" id="clear-cart" ${!cart.length||busy?'disabled':''}>Warenkorb leeren</button><div class="cart-note">${amount<0?'Erst nach Auszahlung buchen.':'Erst nach Zahlung buchen.'}<br>Danach beginnt automatisch der nächste Verkauf.</div></div>
+    <div class="cart-bottom"><div class="total"><span>${amount<0?'Auszuzahlen':'Gesamtbetrag'}</span><strong aria-live="polite">${money(amount<0?-amount:amount)}</strong></div>${amount>0&&cart.length?cashCalculator(change):''}<button class="primary" id="book" ${!cart.length||busy||!change.canBook?'disabled':''}>${busy?'Wird gespeichert …':amount<0?'↩ &nbsp; Rückzahlung buchen':'✓ &nbsp; Verkauf buchen'}</button><button class="text-button" id="clear-cart" ${!cart.length||busy?'disabled':''}>Warenkorb leeren</button><div class="cart-note">${amount<0?'Erst nach Auszahlung buchen.':'Erst nach Zahlung buchen.'}<br>Danach beginnt automatisch der nächste Verkauf.</div></div>
   </aside></div>`;
+}
+function changeFeedback(change) {
+  if(change.status==='invalid')return '<p class="calc-message danger">Bitte einen gültigen Betrag eingeben, zum Beispiel 10,00.</p>';
+  if(change.status==='short')return `<div class="change-result short"><span>Es fehlen noch</span><strong>${money(change.missing)}</strong></div>`;
+  if(change.status==='ready')return `<div class="change-result"><span>Wechselgeld</span><strong>${money(change.change)}</strong></div>`;
+  return '<p class="calc-message">Optional: Erhaltenen Betrag eingeben oder einen Schnellbetrag wählen. Ohne Eingabe kannst du direkt buchen.</p>';
+}
+function cashCalculator(change) {
+  return `<section class="cash-calculator" aria-label="Optionaler Wechselgeldrechner"><button type="button" class="calculator-toggle" id="toggle-change" aria-expanded="${changeOpen}" ${changeOpen?'aria-controls="calculator-body"':''} ${busy?'disabled':''}><span>${changeOpen?'Wechselgeldrechner schließen':'Wechselgeld berechnen'}</span><span class="calc-optional">optional ${changeOpen?'−':'+'}</span></button>${changeOpen?`<div id="calculator-body"><label for="cash-given">Gegeben in € <span class="muted">(optional)</span></label><input id="cash-given" type="text" inputmode="decimal" autocomplete="off" maxlength="12" value="${esc(givenText)}" placeholder="z. B. 10,00" aria-describedby="change-feedback" aria-invalid="${change.status==='invalid'}" ${busy?'disabled':''}><div class="cash-shortcuts">${[500,1000,2000,5000].map(cents=>`<button type="button" data-tender="${cents}" aria-label="${cents/100} Euro gegeben" aria-pressed="${change.tendered===cents}" ${busy?'disabled':''}>${cents/100} €</button>`).join('')}</div><div id="change-feedback" role="status" aria-live="polite">${changeFeedback(change)}</div><button type="button" class="calculator-clear" id="clear-given" ${busy?'disabled':''}>Eingabe leeren</button></div>`:''}</section>`;
+}
+function updateChangeCalculator() {
+  const change=calculateChange(total(cart),givenText);
+  const feedback=$('#change-feedback');if(feedback)feedback.innerHTML=changeFeedback(change);
+  const input=$('#cash-given');if(input)input.setAttribute('aria-invalid',String(change.status==='invalid'));
+  document.querySelectorAll('[data-tender]').forEach(button=>button.setAttribute('aria-pressed',String(Number(button.dataset.tender)===change.tendered)));
+  const book=$('#book');if(book)book.disabled=!cart.length||busy||!change.canBook;
 }
 function allProductOptions() {
   const products = new Map(state.products.map(p => [p.id,p.name]));
@@ -177,6 +196,16 @@ document.addEventListener('click', async event => {
   try {
     if (b.dataset.symbol) { $('#product-form').elements.emoji.value=b.dataset.symbol; renderSymbolPicker(); return; }
     if (b.dataset.page) { page=b.dataset.page; location.hash=page; await refresh(); return; }
+    if (b.id==='toggle-change' && !busy) {
+      changeOpen=!changeOpen;if(!changeOpen)givenText='';render();return;
+    }
+    if (b.dataset.tender && !busy && total(cart)>0) {
+      givenText=(Number(b.dataset.tender)/100).toFixed(2).replace('.',',');
+      const input=$('#cash-given');if(input)input.value=givenText;updateChangeCalculator();return;
+    }
+    if (b.id==='clear-given' && !busy) {
+      givenText='';const input=$('#cash-given');if(input)input.value='';updateChangeCalculator();return;
+    }
     if (busy && (b.dataset.add || b.dataset.minus || b.dataset.plus)) return;
     const id = b.dataset.add || b.dataset.plus || b.dataset.minus;
     if (id) {
@@ -184,14 +213,17 @@ document.addEventListener('click', async event => {
       if (b.dataset.minus) { if (line) line.quantity--; cart=cart.filter(l=>l.quantity>0); }
       else if (line) { if (line.quantity>=999) throw new Error('Maximal 999 Stück pro Produkt.'); line.quantity++; }
       else { const p=state.products.find(p=>p.id===id && p.active); if (!p) return; cart.push({id:p.id,name:p.name,price:p.price,emoji:p.emoji,quantity:1}); }
+      if(!cart.length||total(cart)<=0){givenText='';changeOpen=false;}
       render(); return;
     }
-    if (b.id==='clear-cart') { if (await confirmAction('Diesen Warenkorb leeren? Es wird kein Verkauf gebucht.')) {cart=[];render();} }
+    if (b.id==='clear-cart') { if (await confirmAction('Diesen Warenkorb leeren? Es wird kein Verkauf gebucht.')) {clearCurrentSale();render();} }
     if (b.id==='book' && !busy && cart.length) {
+      const change=calculateChange(total(cart),givenText);
+      if(!change.canBook){notify(change.status==='short'?`Es fehlen noch ${money(change.missing)}. Zum Buchen ohne Rechner die Eingabe leeren.`:'Bitte den erhaltenen Betrag korrigieren oder die Eingabe leeren.',true);return;}
       busy=true;
       const sale=makeSale(cart,crypto.randomUUID(),new Date().toISOString());
       render();
-      try { await save(()=>database.addSale(sale)); cart=[]; if(await refreshAfterSave())notify(`${sale.total<0?'Rückzahlung von '+money(-sale.total):money(sale.total)} gebucht. Bereit für den nächsten Verkauf.`); }
+      try { await save(()=>database.addSale(sale)); clearCurrentSale(); if(await refreshAfterSave())notify(`${sale.total<0?'Rückzahlung von '+money(-sale.total):money(sale.total)} gebucht. Bereit für den nächsten Verkauf.`); }
       finally { busy=false; render(); }
     }
     if (b.id==='new-product') openProduct();
@@ -221,6 +253,9 @@ document.addEventListener('click', async event => {
     }
   } catch(error) { notify(`Nicht gespeichert: ${error.message}`,true); }
 });
+document.addEventListener('input',event=>{
+  if(event.target.id==='cash-given' && !busy){givenText=event.target.value;updateChangeCalculator();}
+});
 document.addEventListener('change', async event => {
   const el=event.target;
   if(el.id==='period') { dayFilter=el.value==='all'?'':localDay(new Date());render(); }
@@ -233,7 +268,7 @@ document.addEventListener('change', async event => {
       if(await confirmAction(`Sicherung mit ${data.products.length} Produkten und ${data.sales.length} Verkäufen wiederherstellen? Die aktuellen Daten auf diesem Gerät und der Warenkorb werden ERSETZT. Lade vorher eine Sicherung herunter.`)) {
         let pin;
         if((await database.adminStatus()).configured){pin=await requestAdminPin();if(pin===null){el.value='';return;}}
-        await save(()=>database.restore(data,pin));cart=[];productFilter='';if(await refreshAfterSave())notify('Sicherung wiederhergestellt.');
+        await save(()=>database.restore(data,pin));clearCurrentSale();productFilter='';if(await refreshAfterSave())notify('Sicherung wiederhergestellt.');
       }
     }catch(error){notify(`Wiederherstellung fehlgeschlagen: ${error.message}`,true);}
     el.value='';
@@ -268,7 +303,7 @@ $('#reset-form').addEventListener('submit',async event=>{
   try {
     const pin=form.elements.pin.value;
     await save(()=>resetMode==='all'?database.resetAll(pin):database.resetBookings(pin));
-    cart=[];productFilter='';dayFilter=localDay(new Date());
+    clearCurrentSale();productFilter='';dayFilter=localDay(new Date());
     $('#reset-dialog').close();form.reset();
     page=resetMode==='all'?'kasse':'statistik';location.hash=page;
     if(await refreshAfterSave())notify(resetMode==='all'?'Kassendaten zurückgesetzt. Drei Startprodukte sind angelegt; Offline-App und Admin-PIN bleiben erhalten.':'Buchungen entfernt. Deine Produkte bleiben erhalten.');

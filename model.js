@@ -16,6 +16,18 @@ export function initialState() {
   ].map(([id,name,category,price,emoji]) => ({ id,name,category,price,emoji,active:true })), sales: [] };
 }
 export function total(lines) { return lines.reduce((sum, line) => sum + line.price * line.quantity, 0); }
+export function calculateChange(amount, given = '') {
+  // Blank input leaves the original booking flow available. Refunds need no tendered cash.
+  if(amount<=0)return { status:'not-required', canBook:true };
+  if(typeof given!=='string')return { status:'invalid', canBook:false };
+  const text=given.trim();
+  if(!text)return { status:'unused', canBook:true };
+  if(!/^\d{1,9}([.,]\d{0,2})?$/.test(text))return { status:'invalid', canBook:false };
+  const [euros,fraction='']=text.replace(',','.').split('.');
+  const tendered=Number(euros)*100+Number(fraction.padEnd(2,'0'));
+  if(tendered<amount)return { status:'short', canBook:false, tendered, missing:amount-tendered };
+  return { status:'ready', canBook:true, tendered, change:tendered-amount };
+}
 export function makeSale(lines, id, timestamp) {
   if (!lines.length || lines.some(l => !Number.isInteger(l.quantity) || l.quantity < 1 || !Number.isInteger(l.price) || l.price === 0)) throw new Error('Der Warenkorb ist leer oder ungültig.');
   const items = lines.map(l => ({ ...l }));
