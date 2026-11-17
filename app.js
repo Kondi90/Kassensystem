@@ -1,6 +1,7 @@
 import { money, localDay, parsePrice, total, makeSale, statistics, validateState, calculateChange, addTender } from './model.js';
 import { createStorage, LEGACY_KEY } from './storage.js';
 import { formatBytes, summarizeData, estimateStorage } from './usage.js';
+import {reportData,createReportPdf} from './report.js';
 
 const database = createStorage();
 let dataChannel;
@@ -40,6 +41,7 @@ let state, page = 'kasse', cart = [], dayFilter = localDay(new Date()), productF
 let admin = { configured: false }, resetMode = 'bookings', resetSubmitting = false, pinSubmitting = false;
 let usageRequest = 0;
 let givenText = '', changeOpen = false;
+let reportBusy=false;
 function clearCurrentSale() { cart=[];givenText='';changeOpen=false; }
 function confirmAction(message) {
   return new Promise(resolve=>{
@@ -125,7 +127,7 @@ function statsPage() {
   const stats = statistics(state.sales,dayFilter,productFilter);
   const relevant = state.sales.filter(s => (!dayFilter || localDay(s.timestamp)===dayFilter) && (!productFilter || s.items.some(i => i.id===productFilter))).slice().reverse();
   return `
-    <div class="panel stat-filters"><label>Zeitraum<select id="period"><option value="day" ${dayFilter?'selected':''}>Einzelner Tag</option><option value="all" ${!dayFilter?'selected':''}>Alle Tage · Gesamt</option></select></label><label>Tag<input type="date" id="day-filter" value="${dayFilter}" ${!dayFilter?'disabled':''}></label><label>Produkt<select id="product-filter"><option value="">Alle Produkte</option>${allProductOptions()}</select></label><button class="secondary" id="export-csv">↓ CSV exportieren</button></div>
+    <div class="panel stat-filters"><label>Zeitraum<select id="period"><option value="day" ${dayFilter?'selected':''}>Einzelner Tag</option><option value="all" ${!dayFilter?'selected':''}>Alle Tage · Gesamt</option></select></label><label>Tag<input type="date" id="day-filter" value="${dayFilter}" ${!dayFilter?'disabled':''}></label><label>Produkt<select id="product-filter"><option value="">Alle Produkte</option>${allProductOptions()}</select></label><div class="export-actions"><button class="secondary" id="export-csv">↓ CSV exportieren</button><button class="secondary" id="export-pdf" ${reportBusy?'disabled':''}>${reportBusy?'PDF wird erstellt …':'↓ PDF-Bericht'}</button></div></div>
     <div class="stats-cards"><div class="metric"><span class="metric-label">Einnahmen</span><strong>${money(stats.income)}</strong><small>${stats.positiveTransactions} positive Buchungen</small></div><div class="metric payout"><span class="metric-label">Auszahlungen</span><strong>${money(stats.payouts)}</strong><small>${stats.negativeTransactions} negative Buchungen</small></div><div class="metric"><span class="metric-label">${productFilter?'Produktsaldo':'Saldo'}</span><strong>${money(stats.revenue)}</strong><small>Einnahmen abzüglich Auszahlungen</small></div></div>
     <div class="stats-cards count-cards"><div class="metric"><span class="metric-label">Gebuchte Artikel</span><strong>${stats.quantity}</strong><small>Stück inkl. Pfand und Rückgaben</small></div><div class="metric"><span class="metric-label">Buchungen insgesamt</span><strong>${stats.transactions}</strong><small>${productFilter?'Mit diesem Produkt':'Inklusive Rückzahlungen'} · davon ${stats.zeroTransactions} mit 0,00 €</small></div></div>
     <p class="sub payment-note">${productFilter?'Beim Produktfilter werden nur die ausgewählten Positionen je Buchung zusammengerechnet.':'Bei gemischten Warenkörben zählt der Gesamtbetrag der Buchung.'} Auszahlungen werden als positiver ausgezahlter Betrag angezeigt. Stornos zählen nicht mit.</p>
@@ -268,6 +270,15 @@ document.addEventListener('click', async event => {
       state=await database.read(); const s=statistics(state.sales,dayFilter,productFilter);
       const rows=[['Zeitraum','Produkt','Stück','Umsatz EUR'],...s.rows.map(r=>[dayFilter||'Alle Tage',r.name,r.quantity,(r.revenue/100).toFixed(2).replace('.',',')]),[dayFilter||'Alle Tage','Gesamt',s.quantity,(s.revenue/100).toFixed(2).replace('.',',')]];
       download(`festkasse-statistik-${dayFilter||'gesamt'}.csv`,'\ufeff'+rows.map(r=>r.map(csvCell).join(';')).join('\r\n'),'text/csv;charset=utf-8');
+    }
+    if(b.id==='export-pdf'&&!reportBusy){
+      reportBusy=true;b.disabled=true;b.textContent='PDF wird erstellt …';
+      const day=dayFilter,productId=productFilter;
+      try{
+        const snapshot=await database.read(),report=reportData(snapshot,day,productId);
+        const bytes=await createReportPdf(report);download(report.filename,bytes,'application/pdf');notify('PDF-Bericht zum Herunterladen erstellt.');
+      }catch(error){notify(`PDF konnte nicht erstellt werden: ${error.message}`,true);}
+      finally{reportBusy=false;const current=$('#export-pdf');if(current){current.disabled=false;current.textContent='↓ PDF-Bericht';}}
     }
   } catch(error) { notify(`Nicht gespeichert: ${error.message}`,true); }
 });

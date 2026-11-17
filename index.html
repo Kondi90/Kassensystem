@@ -58,6 +58,8 @@
   <dialog id="authorize-dialog" aria-labelledby="authorize-title">
     <form id="authorize-form"><h2 id="authorize-title">Admin-PIN bestätigen</h2><p class="sub" style="margin-top:16px">Die Wiederherstellung ersetzt vorhandene Produkte und Buchungen.</p><label>Admin-PIN<input type="password" name="pin" inputmode="numeric" minlength="6" maxlength="12" pattern="[0-9]{6,12}" required autocomplete="off"></label><div class="actions"><button type="button" class="secondary" id="authorize-cancel">Abbrechen</button><button type="submit" class="primary">Fortfahren</button></div></form>
   </dialog>
+  <script src="./vendor/pdf-lib.min.js"></script>
+  <script src="./vendor/fontkit.min.js"></script>
   <script type="module" src="./app.js"></script>
 </body>
 </html>

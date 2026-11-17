@@ -47,6 +47,7 @@ export function makeSale(lines, id, timestamp) {
 export function statistics(sales, day = '', productId = '') {
   const matchingSales = sales.filter(s => !s.cancelledAt && (!day || localDay(s.timestamp) === day));
   const rows = new Map();
+  const hours=Array.from({length:24},(_,hour)=>({hour,transactions:0,positive:0,negative:0,zero:0}));
   let revenue = 0, quantity = 0, transactions = 0, income = 0, payouts = 0;
   let positiveTransactions = 0, negativeTransactions = 0, zeroTransactions = 0;
   for (const sale of matchingSales) {
@@ -54,9 +55,10 @@ export function statistics(sales, day = '', productId = '') {
     if (!items.length) continue;
     transactions++;
     const amount = total(items);
-    if(amount>0){income+=amount;positiveTransactions++;}
-    else if(amount<0){payouts-=amount;negativeTransactions++;}
-    else zeroTransactions++;
+    const activity=hours[new Date(sale.timestamp).getHours()];activity.transactions++;
+    if(amount>0){income+=amount;positiveTransactions++;activity.positive++;}
+    else if(amount<0){payouts-=amount;negativeTransactions++;activity.negative++;}
+    else{zeroTransactions++;activity.zero++;}
     for (const item of items) {
       const row = rows.get(item.id) || { id: item.id, name: item.name, emoji: item.emoji, quantity: 0, revenue: 0 };
       row.quantity += item.quantity; row.revenue += item.quantity * item.price;
@@ -64,7 +66,7 @@ export function statistics(sales, day = '', productId = '') {
       rows.set(item.id, row);
     }
   }
-  return { revenue, quantity, transactions, income, payouts, positiveTransactions, negativeTransactions, zeroTransactions,
+  return { revenue, quantity, transactions, income, payouts, positiveTransactions, negativeTransactions, zeroTransactions,hours,
     rows: [...rows.values()].sort((a,b) => b.revenue-a.revenue) };
 }
 export function validateState(data) {
