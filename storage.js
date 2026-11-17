@@ -120,7 +120,7 @@ export function createStorage({
     await transaction('readwrite', tx => tx.objectStore('sales').add(copy));
   }
 
-  async function saveProduct(product) {
+  async function saveProduct(product, { requireExisting = false } = {}) {
     const copy = structuredClone(product);
     validateState({ version: 1, products: [{ ...copy, category: copy.category || 'Sonstiges' }], sales: [] });
     await initialize();
@@ -128,6 +128,7 @@ export function createStorage({
       const products = tx.objectStore('products');
       const existing = products.get(copy.id);
       existing.onsuccess = guard(() => {
+        if(requireExisting && !existing.result)throw new Error('Dieses Produkt wurde inzwischen gelöscht. Bitte die Produktliste neu öffnen.');
         products.put({ ...existing.result, ...copy, category: existing.result?.category || copy.category || 'Sonstiges' });
         if (!existing.result) {
           const meta = tx.objectStore('metadata').get('state');
@@ -136,6 +137,18 @@ export function createStorage({
             tx.objectStore('metadata').put(meta.result);
           });
         }
+      });
+    });
+  }
+
+  async function deleteProduct(id) {
+    if(typeof id!=='string'||!id)throw new Error('Ungültiges Produkt.');
+    await initialize();
+    await transaction('readwrite',(tx,done,guard)=>{
+      tx.objectStore('products').delete(id);
+      const request=tx.objectStore('metadata').get('state');
+      request.onsuccess=guard(()=>{
+        tx.objectStore('metadata').put({...request.result,productOrder:request.result.productOrder.filter(productId=>productId!==id)});
       });
     });
   }
@@ -221,5 +234,5 @@ export function createStorage({
     connection?.close(); connection = null; opening = null; initializing = null;
   }
 
-  return { initialize, read, addSale, saveProduct, cancelSale, restore, adminStatus, setAdminPin, resetBookings, resetAll, close };
+  return { initialize, read, addSale, saveProduct, deleteProduct, cancelSale, restore, adminStatus, setAdminPin, resetBookings, resetAll, close };
 }

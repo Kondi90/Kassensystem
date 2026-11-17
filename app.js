@@ -1,4 +1,4 @@
-import { money, localDay, parsePrice, total, makeSale, statistics, validateState, calculateChange } from './model.js';
+import { money, localDay, parsePrice, total, makeSale, statistics, validateState, calculateChange, addTender } from './model.js';
 import { createStorage, LEGACY_KEY } from './storage.js';
 import { formatBytes, summarizeData, estimateStorage } from './usage.js';
 
@@ -62,6 +62,12 @@ async function save(operation) {
 async function refresh() {
   const result = await Promise.all([database.read(), database.adminStatus()]);
   [state, admin] = result;
+  const available=new Set(state.products.map(product=>product.id));
+  const remaining=cart.filter(line=>available.has(line.id));
+  if(remaining.length!==cart.length){
+    cart=remaining;if(!cart.length||total(cart)<=0){givenText='';changeOpen=false;}
+    notify('Gelöschte Produkte wurden aus dem offenen Warenkorb entfernt.');
+  }
   render(); checkOffline();
 }
 async function refreshAfterSave() {
@@ -99,16 +105,15 @@ function changeFeedback(change) {
   if(change.status==='invalid')return '<p class="calc-message danger">Bitte einen gültigen Betrag eingeben, zum Beispiel 10,00.</p>';
   if(change.status==='short')return `<div class="change-result short"><span>Es fehlen noch</span><strong>${money(change.missing)}</strong></div>`;
   if(change.status==='ready')return `<div class="change-result"><span>Wechselgeld</span><strong>${money(change.change)}</strong></div>`;
-  return '<p class="calc-message">Optional: Erhaltenen Betrag eingeben oder einen Schnellbetrag wählen. Ohne Eingabe kannst du direkt buchen.</p>';
+  return '<p class="calc-message">Optional: Gesamtbetrag eintippen oder Schnellbeträge addieren. Ohne Eingabe kannst du direkt buchen.</p>';
 }
 function cashCalculator(change) {
-  return `<section class="cash-calculator" aria-label="Optionaler Wechselgeldrechner"><button type="button" class="calculator-toggle" id="toggle-change" aria-expanded="${changeOpen}" ${changeOpen?'aria-controls="calculator-body"':''} ${busy?'disabled':''}><span>${changeOpen?'Wechselgeldrechner schließen':'Wechselgeld berechnen'}</span><span class="calc-optional">optional ${changeOpen?'−':'+'}</span></button>${changeOpen?`<div id="calculator-body"><label for="cash-given">Gegeben in € <span class="muted">(optional)</span></label><input id="cash-given" type="text" inputmode="decimal" autocomplete="off" maxlength="12" value="${esc(givenText)}" placeholder="z. B. 10,00" aria-describedby="change-feedback" aria-invalid="${change.status==='invalid'}" ${busy?'disabled':''}><div class="cash-shortcuts">${[500,1000,2000,5000].map(cents=>`<button type="button" data-tender="${cents}" aria-label="${cents/100} Euro gegeben" aria-pressed="${change.tendered===cents}" ${busy?'disabled':''}>${cents/100} €</button>`).join('')}</div><div id="change-feedback" role="status" aria-live="polite">${changeFeedback(change)}</div><button type="button" class="calculator-clear" id="clear-given" ${busy?'disabled':''}>Eingabe leeren</button></div>`:''}</section>`;
+  return `<section class="cash-calculator" aria-label="Optionaler Wechselgeldrechner"><button type="button" class="calculator-toggle" id="toggle-change" aria-expanded="${changeOpen}" ${changeOpen?'aria-controls="calculator-body"':''} ${busy?'disabled':''}><span>${changeOpen?'Wechselgeldrechner schließen':'Wechselgeld berechnen'}</span><span class="calc-optional">optional ${changeOpen?'−':'+'}</span></button>${changeOpen?`<div id="calculator-body"><label for="cash-given">Gegeben in € <span class="muted">(optional)</span></label><input id="cash-given" type="text" inputmode="decimal" autocomplete="off" maxlength="12" value="${esc(givenText)}" placeholder="z. B. 10,00" aria-describedby="change-feedback" aria-invalid="${change.status==='invalid'}" ${busy?'disabled':''}><div class="cash-shortcuts">${[100,200,500,1000,2000,5000].map(cents=>`<button type="button" data-tender="${cents}" aria-label="${cents/100} Euro hinzufügen" ${busy?'disabled':''}>+${cents/100} €</button>`).join('')}</div><p class="cash-add-note">Jeder Tipp addiert den Betrag.</p><div id="change-feedback" role="status" aria-live="polite">${changeFeedback(change)}</div><button type="button" class="calculator-clear" id="clear-given" ${busy?'disabled':''}>Eingabe leeren</button></div>`:''}</section>`;
 }
 function updateChangeCalculator() {
   const change=calculateChange(total(cart),givenText);
   const feedback=$('#change-feedback');if(feedback)feedback.innerHTML=changeFeedback(change);
   const input=$('#cash-given');if(input)input.setAttribute('aria-invalid',String(change.status==='invalid'));
-  document.querySelectorAll('[data-tender]').forEach(button=>button.setAttribute('aria-pressed',String(Number(button.dataset.tender)===change.tendered)));
   const book=$('#book');if(book)book.disabled=!cart.length||busy||!change.canBook;
 }
 function allProductOptions() {
@@ -183,6 +188,8 @@ function openProduct(id) {
   form.elements.emoji.value = p?.emoji || '🍰'; form.elements.active.checked = p?.active ?? true;
   renderSymbolPicker();
   $('#dialog-title').textContent = p ? 'Produkt bearbeiten' : 'Produkt anlegen';
+  $('#delete-product').classList.toggle('hidden',!p);
+  $('#delete-product').disabled=false;
   $('#product-dialog').showModal();
 }
 function download(filename,content,type) {
@@ -200,7 +207,7 @@ document.addEventListener('click', async event => {
       changeOpen=!changeOpen;if(!changeOpen)givenText='';render();return;
     }
     if (b.dataset.tender && !busy && total(cart)>0) {
-      givenText=(Number(b.dataset.tender)/100).toFixed(2).replace('.',',');
+      givenText=addTender(givenText,Number(b.dataset.tender));
       const input=$('#cash-given');if(input)input.value=givenText;updateChangeCalculator();return;
     }
     if (b.id==='clear-given' && !busy) {
@@ -237,6 +244,17 @@ document.addEventListener('click', async event => {
       catch(error){$('#reset-error').textContent=`Sicherung fehlgeschlagen: ${error.message}`;}
     }
     if (b.dataset.edit) openProduct(b.dataset.edit);
+    if (b.id==='delete-product') {
+      const id=$('#product-form').elements.id.value;
+      const product=state.products.find(p=>p.id===id);if(!product)return;
+      if(await confirmAction(`„${product.name}“ endgültig aus der Produktliste löschen? Bereits gebuchte Verkäufe und die Statistik bleiben erhalten. Das Produkt wird auch aus einem offenen Warenkorb entfernt.`)){
+        b.disabled=true;
+        try {
+          await save(()=>database.deleteProduct(id));$('#product-dialog').close();$('#product-form').reset();
+          if(await refreshAfterSave())notify('Produkt gelöscht. Bisherige Verkäufe bleiben erhalten.');
+        }finally{b.disabled=false;}
+      }
+    }
     if (b.id==='close-dialog') $('#product-dialog').close();
     if (b.dataset.cancel) {
       const sale=state.sales.find(s=>s.id===b.dataset.cancel);
@@ -280,7 +298,7 @@ $('#product-form').addEventListener('submit',async event=>{
   try {
     const product={id:form.elements.id.value||crypto.randomUUID(),name:form.elements.name.value.trim(),price:parsePrice(form.elements.price.value),emoji:form.elements.emoji.value,active:form.elements.active.checked};
     if(!product.name) throw new Error('Bitte den Produktnamen ausfüllen.');
-    await save(()=>database.saveProduct(product));
+    await save(()=>database.saveProduct(product,{requireExisting:!!form.elements.id.value}));
     $('#product-dialog').close();if(await refreshAfterSave())notify('Produkt gespeichert.');
   }catch(error){$('#form-error').textContent=`Nicht gespeichert: ${error.message}`;}finally{button.disabled=false;}
 });
