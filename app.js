@@ -10,6 +10,26 @@ const $ = selector => document.querySelector(selector);
 const esc = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function symbol(value) {
   if(value==='none')return '';
+  const svg=body=>`<svg viewBox="0 0 64 64" class="wine-symbol" aria-hidden="true">${body}</svg>`;
+  const bottles={
+    wasserflasche:{glass:'#d2effa',liquid:'#8dcde7',cap:'#3d86bf',stroke:'#528da7',label:'<path d="M21 39q5-5 11 0t11 0M21 45q5-5 11 0t11 0" fill="none" stroke="#328bb5" stroke-width="2.5" stroke-linecap="round"/>'},
+    apfelsaftflasche:{glass:'#e4e8bc',liquid:'#e7b14c',cap:'#568e48',stroke:'#9a8c46',label:'<path d="M32 37c-10-6-14 4-8 11 4 5 7 1 8 2 3 3 9-1 10-7 1-7-6-10-10-6Z" fill="#78a945"/><path d="m32 38-1-6" stroke="#7f5e32" stroke-width="2"/><path d="M33 34q3-7 9-5-1 7-9 5" fill="#4d8a42"/>'},
+    speziflasche:{glass:'#aa7048',liquid:'#5e3528',cap:'#e57d2d',stroke:'#6d462f',label:'<circle cx="28" cy="42" r="8" fill="#f5a331"/><circle cx="36" cy="45" r="6" fill="#f7da69"/><path d="m28 36 0 11m-5-7 10 5m-1-8-8 8" stroke="#fff3bd" stroke-width="1.4"/>'},
+    bierflasche:{glass:'#b57c35',liquid:'#99612d',cap:'#bb9540',stroke:'#79522b',label:'<path d="M32 33v18m0-14-5-3m5 8-5-3m5 8-5-3m5-7 5-3m-5 8 5-3m-5 8 5-3" fill="none" stroke="#b58c31" stroke-width="2" stroke-linecap="round"/>'}
+  };
+  if(bottles[value]){
+    const b=bottles[value];
+    return svg(`<path d="M27 8h10v12c0 7 10 9 10 17v19q0 5-5 5H22q-5 0-5-5V37c0-8 10-10 10-17Z" fill="${b.glass}" stroke="${b.stroke}" stroke-width="2"/><path d="M21 33h22v22q0 2-3 2H24q-3 0-3-2Z" fill="${b.liquid}"/><rect x="25" y="3" width="14" height="8" rx="2" fill="${b.cap}"/><rect x="17" y="30" width="30" height="23" rx="3" fill="#fff6df"/>${b.label}<path d="M23 25v4m0 25v2" stroke="#fff" opacity=".65" stroke-width="2.5" stroke-linecap="round"/>`);
+  }
+  const coffeeSymbols={
+    cappuccino:'<ellipse cx="29" cy="55" rx="26" ry="6" fill="#cfdbdf"/><path d="M44 27h6c13 0 12 19 0 19h-7" fill="none" stroke="#91a8b2" stroke-width="5"/><path d="M8 23h38v18q-1 14-19 14T8 41Z" fill="#f4f4e9" stroke="#91a8b2" stroke-width="2"/><ellipse cx="27" cy="24" rx="19" ry="8" fill="#b27b48" stroke="#91a8b2" stroke-width="2"/><ellipse cx="27" cy="24" rx="14" ry="5" fill="#f4dfb8"/><path d="M17 24q7-8 19 0-8 7-15 0 5-4 10 0" fill="none" stroke="#bd8e5a" stroke-width="1.7" stroke-linecap="round"/><path d="M21 11c-5-5 5-5 0-10m12 10c-5-5 5-5 0-10" fill="none" stroke="#aab7b5" stroke-width="2.5" stroke-linecap="round"/>',
+    espresso:'<ellipse cx="29" cy="54" rx="23" ry="6" fill="#d8dce5"/><path d="M39 31h8c10 0 9 13 0 14h-8" fill="none" stroke="#9e939f" stroke-width="4"/><path d="M13 29h29v12q-1 12-15 12T13 41Z" fill="#faf1e8" stroke="#9e939f" stroke-width="2"/><ellipse cx="27.5" cy="29" rx="14.5" ry="6" fill="#57382c" stroke="#9e939f" stroke-width="2"/><path d="M18 29q8-5 18 0" fill="none" stroke="#c89251" stroke-width="2"/><path d="M23 16c-6-6 5-6 0-12m10 12c-6-6 5-6 0-12" fill="none" stroke="#aab7b5" stroke-width="2.5" stroke-linecap="round"/>',
+    latte:'<ellipse cx="30" cy="59" rx="21" ry="4" fill="#d7e1df"/><path d="M44 20h6c12 0 12 24 0 24h-7" fill="none" stroke="#91aeb3" stroke-width="4"/><path d="m15 10 3 43q0 5 5 5h14q5 0 5-5l3-43Z" fill="#d6edf0" stroke="#91aeb3" stroke-width="2"/><path d="m19 31 2 22q0 2 3 2h12q3 0 3-2l2-22Z" fill="#fff2d5"/><path d="m18 21 1 13h22l1-13Z" fill="#aa7145"/><ellipse cx="30" cy="11" rx="15" ry="6" fill="#fff7e8" stroke="#91aeb3" stroke-width="2"/><path d="m18 12 1 8q11 7 23 0l1-8Z" fill="#fff7e8"/><ellipse cx="30" cy="19" rx="12" ry="4" fill="#fff8ed"/><path d="m23 39 1 11" stroke="#fff" stroke-width="2" stroke-linecap="round"/>'
+  };
+  if(coffeeSymbols[value])return svg(coffeeSymbols[value]);
+  if(value==='aperol')return svg('<path d="M30 40v17m-11 3h22" fill="none" stroke="#82a5aa" stroke-width="3" stroke-linecap="round"/><path d="M13 8h34l-3 22q-2 14-14 14T16 30Z" fill="#e0f1f3" stroke="#82a5aa" stroke-width="2"/><path d="m17 21 2 9q1 11 11 11t11-11l2-9Z" fill="#ed853e"/><path d="m33 28 7-25h10" fill="none" stroke="#66796e" stroke-width="2.5" stroke-linecap="round"/><circle cx="18" cy="18" r="10" fill="#ffc468" stroke="#ed923e" stroke-width="2"/><path d="m18 10 0 16m-7-12 14 8m-14 0 14-8" stroke="#fff1b8" stroke-width="1.6"/><path d="m24 25 6-3 4 6-6 3Z" fill="#ffe7c0" opacity=".8"/>');
+  if(value==='stamperl')return svg('<ellipse cx="32" cy="57" rx="19" ry="4" fill="#d4e2e2"/><path d="m12 12 6 42q1 5 6 5h16q5 0 6-5l6-42Z" fill="#d4eced" stroke="#80a5aa" stroke-width="2.5"/><path d="m19 30 4 21q0 3 3 3h12q3 0 3-3l4-21Z" fill="#e8b45e"/><ellipse cx="32" cy="30" rx="13" ry="4" fill="#f3cc86"/><ellipse cx="32" cy="12" rx="20" ry="6" fill="#f5faf9" stroke="#80a5aa" stroke-width="2"/><path d="m21 21 4 23" stroke="#fff" stroke-width="3" stroke-linecap="round"/>');
+  if(value==='wert-5'||value==='wert-10')return svg(`<circle cx="32" cy="32" r="28" fill="${value==='wert-5'?'#f1ca68':'#a9cdeb'}" stroke="${value==='wert-5'?'#ba9135':'#5f90b6'}" stroke-width="3"/><circle cx="32" cy="32" r="22" fill="#fff9e8" stroke="${value==='wert-5'?'#ba9135':'#5f90b6'}" stroke-width="1.5"/><text x="32" y="44" text-anchor="middle" font-family="Arial,sans-serif" font-size="${value==='wert-5'?36:31}" font-weight="bold" fill="#354c43">${value==='wert-5'?'5':'10'}</text>`);
   if(/^nummer-[123]$/.test(value))return `<svg viewBox="0 0 64 64" class="wine-symbol" aria-hidden="true"><rect x="5" y="5" width="54" height="54" rx="15" fill="${{'nummer-1':'#3989b5','nummer-2':'#25885b','nummer-3':'#9b68a3'}[value]}"/><text x="32" y="46" text-anchor="middle" font-family="Arial,sans-serif" font-size="40" font-weight="bold" fill="white">${value.slice(-1)}</text></svg>`;
   const drawings = {
     pfand: '<path d="M10 28A23 23 0 0 1 50 17M54 37A23 23 0 0 1 14 48" fill="none" stroke="#268965" stroke-width="5" stroke-linecap="round"/><path d="m40 18 12 3-1-12M24 47l-12-3 1 12" fill="none" stroke="#268965" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="33" r="13" fill="#f3cb61" stroke="#c58e29" stroke-width="2"/><text x="32" y="41" text-anchor="middle" font-family="Arial,sans-serif" font-size="22" font-weight="bold" fill="#9b6a1e">€</text>',
@@ -27,14 +47,15 @@ function symbol(value) {
   return `<svg viewBox="0 0 64 64" class="wine-symbol" aria-hidden="true"><path d="M22 17c-7-7 6-7 0-14M34 17c-7-7 6-7 0-14" fill="none" stroke="#a9b4b0" stroke-width="3" stroke-linecap="round"/><path d="M45 27h5c15 0 14 24 0 24h-6" fill="none" stroke="#7b9ca4" stroke-width="5"/><path d="M12 23h34v27q0 10-10 10H22q-10 0-10-10Z" fill="#dcecf0" stroke="#7b9ca4" stroke-width="2"/><path d="M16 31h26v19q0 6-6 6H22q-6 0-6-6Z" fill="${colors[value]}"/><ellipse cx="29" cy="31" rx="13" ry="3" fill="${colors[value]}"/><path d="M20 36v12" stroke="#fff" opacity=".5" stroke-width="3" stroke-linecap="round"/></svg>`;
 }
 const productSymbols = [
-  ['🍰','Kuchen'],['🥨','Brezel'],['🧇','Waffel'],['☕','Kaffee'],['🧃','Saft'],['💧','Wasser'],
-  ['🌭','Würstchen'],['bratwurstsemmel','Bratwurstsemmel'],['stockbrot','Stockbrot'],['stock','Stock / Stockpfand'],['bier','Bier'],['flasche','Getränkeflasche'],['kiachl','Kiachl'],['🍕','Pizza'],['🍟','Pommes'],['plaetzchen','Plätzchen'],['🍪','Keks'],['pfand','Pfand'],['🥤','Becherpfand'],['↩️','Pfand zurück'],
+  ['🍰','Kuchen'],['🧇','Waffel'],['bratwurstsemmel','Bratwurstsemmel'],['stockbrot','Stockbrot'],['kiachl','Kiachl'],['🍟','Pommes'],['plaetzchen','Plätzchen'],['🍪','Keks'],
+  ['wasserflasche','Wasserflasche'],['apfelsaftflasche','Apfelsaftflasche'],['speziflasche','Speziflasche'],['bierflasche','Bierflasche'],['flasche','Getränkeflasche'],['bier','Bier'],
+  ['☕','Kaffee'],['cappuccino','Cappuccino'],['espresso','Espresso'],['latte','Latte'],['aperol','Aperol'],['stamperl','Stampal'],
   ['gluehwein-hell','Glühwein hell'],['gluehwein-rose','Glühwein rosé'],['gluehwein-dunkel','Glühwein dunkel'],
-  ['🍦','Eis'],['🥗','Salat'],['🎟️','Eintritt'],['🎁','Geschenk'],['🍽️','Essen'],['⭐','Stern'],['❤️','Herz'],['🔵','Kreis'],['nummer-1','Nummer 1'],['nummer-2','Nummer 2'],['nummer-3','Nummer 3'],['none','Kein Symbol']
+  ['stock','Stock / Stockpfand'],['pfand','Pfand'],['↩️','Pfand zurück'],['🍦','Eis'],['🎟️','Eintritt'],['wert-5','5er'],['wert-10','10er'],['none','Kein Symbol']
 ];
 function renderSymbolPicker() {
   const selected = $('#product-form').elements.emoji.value;
-  const choices = productSymbols.some(([value])=>value===selected) ? productSymbols : [...productSymbols,[selected,'Eigenes Symbol']];
+  const choices = productSymbols.some(([value])=>value===selected) ? productSymbols : [...productSymbols,[selected,'Bisheriges Symbol']];
   $('#symbol-picker').innerHTML = choices.map(([value,label])=>`<button type="button" class="symbol-choice" data-symbol="${esc(value)}" aria-label="${esc(label)}" aria-pressed="${value===selected}" title="${esc(label)}">${value==='none'?'<span class="no-symbol-choice">Ohne</span>':symbol(value)}</button>`).join('');
 }
 function renderColorPicker() {

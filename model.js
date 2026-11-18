@@ -1,13 +1,21 @@
 export const money = cents => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(cents / 100);
 export const productColors = [
   {id:'default',label:'Weiß',background:'#ffffff'},
+  {id:'grey',label:'Silber',background:'#c9cfd7'},
+  {id:'gold',label:'Gold',background:'#edc264'},
   {id:'yellow',label:'Gelb',background:'#ffe07a'},
   {id:'orange',label:'Orange',background:'#ffc58a'},
+  {id:'coral',label:'Koralle',background:'#f5a37d'},
   {id:'red',label:'Rot',background:'#f5aca7'},
+  {id:'pink',label:'Rosa',background:'#f2b5cf'},
   {id:'green',label:'Grün',background:'#b9dc98'},
+  {id:'lime',label:'Limette',background:'#d3e875'},
+  {id:'mint',label:'Mint',background:'#a6ddaf'},
   {id:'teal',label:'Türkis',background:'#98dcd0'},
   {id:'blue',label:'Blau',background:'#afcef8'},
-  {id:'purple',label:'Lila',background:'#d1b6ed'}
+  {id:'sky',label:'Hellblau',background:'#93dbe9'},
+  {id:'purple',label:'Lila',background:'#d1b6ed'},
+  {id:'berry',label:'Beere',background:'#dca4c4'}
 ];
 export const getProductColor = id => productColors.find(color=>color.id===id) || productColors[0];
 export const localDay = value => {
