@@ -1,4 +1,4 @@
-import { money, localDay, parsePrice, total, makeSale, statistics, validateState, calculateChange, addTender } from './model.js';
+import { money, localDay, parsePrice, total, makeSale, statistics, validateState, calculateChange, addTender, productColors, getProductColor } from './model.js';
 import { createStorage, LEGACY_KEY } from './storage.js';
 import { formatBytes, summarizeData, estimateStorage } from './usage.js';
 import {reportData,createReportPdf} from './report.js';
@@ -36,6 +36,10 @@ function renderSymbolPicker() {
   const selected = $('#product-form').elements.emoji.value;
   const choices = productSymbols.some(([value])=>value===selected) ? productSymbols : [...productSymbols,[selected,'Eigenes Symbol']];
   $('#symbol-picker').innerHTML = choices.map(([value,label])=>`<button type="button" class="symbol-choice" data-symbol="${esc(value)}" aria-label="${esc(label)}" aria-pressed="${value===selected}" title="${esc(label)}">${value==='none'?'<span class="no-symbol-choice">Ohne</span>':symbol(value)}</button>`).join('');
+}
+function renderColorPicker() {
+  const selected=$('#product-form').elements.color.value;
+  $('#color-picker').innerHTML=productColors.map(color=>`<button type="button" class="color-choice" style="--product-color:${color.background}" data-color="${color.id}" aria-label="Buttonfarbe ${color.label}" aria-pressed="${color.id===selected}"><span class="color-check" aria-hidden="true">${color.id===selected?'✓':''}</span>${color.label}</button>`).join('');
 }
 let state, page = 'kasse', cart = [], dayFilter = localDay(new Date()), productFilter = '', busy = false, toastTimer;
 let admin = { configured: false }, resetMode = 'bookings', resetSubmitting = false, pinSubmitting = false;
@@ -96,7 +100,7 @@ function cashPage() {
   <div class="cash-layout"><section aria-label="Produkte">
     <div class="products">${products.map(p => {
       const n = cart.find(l => l.id===p.id)?.quantity || 0;
-      return `<button class="product ${p.category==='Getränke'?'drink':''} ${p.emoji==='none'?'no-symbol':''}" data-add="${esc(p.id)}" aria-label="${esc(p.name)}, ${money(p.price)}, hinzufügen">${p.emoji==='none'?'':`<span class="product-symbol" aria-hidden="true">${symbol(p.emoji)}</span>`}${n ? `<span class="count-badge">${n}</span>`:''}<span class="product-name">${esc(p.name)}</span><span class="product-price">${money(p.price)}</span><span class="product-add" aria-hidden="true">+</span></button>`;
+      return `<button class="product ${p.category==='Getränke'?'drink':''} ${p.emoji==='none'?'no-symbol':''}" style="--product-color:${getProductColor(p.color).background}" data-add="${esc(p.id)}" aria-label="${esc(p.name)}, ${money(p.price)}, hinzufügen">${p.emoji==='none'?'':`<span class="product-symbol" aria-hidden="true">${symbol(p.emoji)}</span>`}${n ? `<span class="count-badge">${n}</span>`:''}<span class="product-name">${esc(p.name)}</span><span class="product-price">${money(p.price)}</span><span class="product-add" aria-hidden="true">+</span></button>`;
     }).join('')}</div>${!products.length ? '<div class="panel empty">Noch keine aktiven Produkte. Lege sie unter Einstellungen an.</div>' : ''}
   </section><aside class="cart" aria-label="Aktueller Verkauf"><div class="cart-heading"><h2>Aktueller Verkauf</h2><span class="tag">${count} Artikel</span></div>
     <div class="cart-lines">${cart.length ? cart.map(l => `<div class="cart-line"><div><div class="cart-line-name">${esc(l.name)}</div><div class="line-price">${money(l.price)} / Stück · ${money(l.price*l.quantity)}</div></div><div class="quantity"><button data-minus="${esc(l.id)}" aria-label="Ein ${esc(l.name)} entfernen">−</button><span>${l.quantity}</span><button data-plus="${esc(l.id)}" aria-label="Ein ${esc(l.name)} hinzufügen">+</button></div></div>`).join('') : '<div class="empty"><span class="empty-symbol" aria-hidden="true">♧</span>Hier ist Platz für Leckeres.<br>Wähle links die ersten Artikel aus.</div>'}</div>
@@ -138,7 +142,7 @@ function settingsPage() {
   const usage=summarizeData(state);
   return `
     <div class="notice">Die Startprodukte und Preise sind Beispiele. Für Pfand zwei Produkte anlegen, z. B. „Becherpfand“ mit 2,00 € und „Pfand zurück“ mit −2,00 €. Negative Preise werden vom Gesamtbetrag abgezogen. Preisänderungen verändern bereits gebuchte Verkäufe nicht.</div>
-    <section class="panel"><div class="section-heading"><h2>Eure Produkte <span class="tag">${state.products.filter(p=>p.active).length} aktiv</span></h2><button class="primary" id="new-product">+ Produkt anlegen</button></div><div class="table-wrap"><table><thead><tr><th>Produkt</th><th>Preis</th><th>Status</th><th></th></tr></thead><tbody>${state.products.map(p => `<tr><td><div class="table-product"><span class="tiny-symbol">${symbol(p.emoji)}</span>${esc(p.name)}</div></td><td>${money(p.price)}</td><td><span class="status-dot ${p.active?'':'inactive'}">${p.active?'Aktiv':'Pausiert'}</span></td><td class="right"><button class="secondary" data-edit="${esc(p.id)}" aria-label="${esc(p.name)} bearbeiten">Bearbeiten</button></td></tr>`).join('')}</tbody></table></div></section>
+    <section class="panel"><div class="section-heading"><h2>Eure Produkte <span class="tag">${state.products.filter(p=>p.active).length} aktiv</span></h2><button class="primary" id="new-product">+ Produkt anlegen</button></div><div class="table-wrap"><table class="product-table"><thead><tr><th>Produkt</th><th>Preis</th><th>Status</th><th></th></tr></thead><tbody>${state.products.map(p => `<tr style="--product-color:${getProductColor(p.color).background}"><td><div class="table-product"><span class="tiny-symbol">${symbol(p.emoji)}</span>${esc(p.name)}</div></td><td>${money(p.price)}</td><td><span class="status-dot ${p.active?'':'inactive'}">${p.active?'Aktiv':'Pausiert'}</span></td><td class="right"><button class="secondary" data-edit="${esc(p.id)}" aria-label="${esc(p.name)} bearbeiten">Bearbeiten</button></td></tr>`).join('')}</tbody></table></div></section>
     <section class="panel" aria-label="Daten und Speicher"><div class="section-heading"><h2>Daten & Speicher</h2><button class="text-button" id="refresh-storage">↻ Aktualisieren</button></div><div class="usage-grid"><div class="usage-card"><span class="usage-label">Gespeicherte Buchungen</span><strong>${usage.bookings.toLocaleString('de-DE')}</strong><small>${usage.active.toLocaleString('de-DE')} nicht storniert · ${usage.cancelled.toLocaleString('de-DE')} storniert</small><small>Alle Tage, inklusive Rückzahlungen</small></div><div class="usage-card"><span class="usage-label">Größe der Kassensicherung</span><strong>${formatBytes(usage.backupBytes)}</strong><small>Produkte und Buchungen als JSON, ohne PIN und Offline-Dateien.</small><small class="${usage.backupBytes>20_000_000?'danger':''}">${usage.backupBytes>20_000_000?'Diese Sicherung überschreitet die aktuelle Importgrenze von 20 MB.':'Aktuelle Importgrenze: 20 MB'}</small></div><div class="usage-card" id="device-storage" aria-live="polite"><span class="usage-label">Belegter Website-Speicher</span><strong>Wird ermittelt …</strong></div></div><p class="sub usage-note">Die Sicherungsgröße entspricht der heruntergeladenen JSON-Datei. Der Website-Speicher enthält zusätzlich technische Daten; andere Apps unter derselben Domain können mitgezählt werden. Das Speicherbudget ist keine Garantie für tatsächlich freien Gerätespeicher.</p></section>
     <div class="settings-grid"><section class="panel"><h2>Daten sichern</h2><p>Produkte und Buchungen liegen in einer lokalen IndexedDB-Datenbank auf diesem Gerät. Eine Sicherung schützt vor Datenverlust, etwa beim Löschen der Website-Daten. Die Statistik synchronisiert sich nicht mit anderen Geräten. Auch bisherige JSON-Sicherungen lassen sich wiederherstellen.</p><div class="actions"><button class="secondary" id="backup">↓ Sicherung herunterladen</button><button class="text-button" id="restore">Sicherung wiederherstellen</button><input class="hidden" type="file" id="backup-file" accept="application/json,.json"></div></section>
     <section class="panel"><h2>Als App verwenden</h2><p>Auf dem iPad die Kasse in Safari öffnen, auf „Teilen“ tippen und „Zum Home-Bildschirm“ wählen. Nach dem ersten vollständigen Laden kann die App offline genutzt werden.</p><p id="offline-note">Der Offline-Status wird geprüft …</p><p>Vor dem Fest einmal mit Beispielverkäufen auf dem vorgesehenen iPad testen und eine Sicherung anlegen.</p></section></div>
@@ -188,6 +192,8 @@ function openProduct(id) {
   form.elements.name.value = p?.name || '';
   form.elements.price.value = p ? (p.price/100).toFixed(2).replace('.',',') : '';
   form.elements.emoji.value = p?.emoji || '🍰'; form.elements.active.checked = p?.active ?? true;
+  form.elements.color.value=getProductColor(p?.color).id;
+  renderColorPicker();
   renderSymbolPicker();
   $('#dialog-title').textContent = p ? 'Produkt bearbeiten' : 'Produkt anlegen';
   $('#delete-product').classList.toggle('hidden',!p);
@@ -204,6 +210,14 @@ document.addEventListener('click', async event => {
   if (!state) return;
   try {
     if (b.dataset.symbol) { $('#product-form').elements.emoji.value=b.dataset.symbol; renderSymbolPicker(); return; }
+    if (b.dataset.color) {
+      $('#product-form').elements.color.value=b.dataset.color;
+      document.querySelectorAll('#color-picker button').forEach(choice=>{
+        const selected=choice.dataset.color===b.dataset.color;
+        choice.setAttribute('aria-pressed',String(selected));choice.querySelector('.color-check').textContent=selected?'✓':'';
+      });
+      return;
+    }
     if (b.dataset.page) { page=b.dataset.page; location.hash=page; await refresh(); return; }
     if (b.id==='toggle-change' && !busy) {
       changeOpen=!changeOpen;if(!changeOpen)givenText='';render();return;
@@ -307,7 +321,7 @@ $('#product-form').addEventListener('submit',async event=>{
   event.preventDefault();const form=event.target;
   const button=form.querySelector('[type=submit]');button.disabled=true;
   try {
-    const product={id:form.elements.id.value||crypto.randomUUID(),name:form.elements.name.value.trim(),price:parsePrice(form.elements.price.value),emoji:form.elements.emoji.value,active:form.elements.active.checked};
+    const product={id:form.elements.id.value||crypto.randomUUID(),name:form.elements.name.value.trim(),price:parsePrice(form.elements.price.value),emoji:form.elements.emoji.value,color:form.elements.color.value,active:form.elements.active.checked};
     if(!product.name) throw new Error('Bitte den Produktnamen ausfüllen.');
     await save(()=>database.saveProduct(product,{requireExisting:!!form.elements.id.value}));
     $('#product-dialog').close();if(await refreshAfterSave())notify('Produkt gespeichert.');

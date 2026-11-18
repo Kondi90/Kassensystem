@@ -1,4 +1,15 @@
 export const money = cents => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(cents / 100);
+export const productColors = [
+  {id:'default',label:'Weiß',background:'#ffffff'},
+  {id:'yellow',label:'Gelb',background:'#ffe07a'},
+  {id:'orange',label:'Orange',background:'#ffc58a'},
+  {id:'red',label:'Rot',background:'#f5aca7'},
+  {id:'green',label:'Grün',background:'#b9dc98'},
+  {id:'teal',label:'Türkis',background:'#98dcd0'},
+  {id:'blue',label:'Blau',background:'#afcef8'},
+  {id:'purple',label:'Lila',background:'#d1b6ed'}
+];
+export const getProductColor = id => productColors.find(color=>color.id===id) || productColors[0];
 export const localDay = value => {
   const d = new Date(value);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -76,6 +87,7 @@ export function validateState(data) {
   const ids = new Set();
   for (const p of data.products) {
     if (!validString(p.id) || ids.has(p.id) || !validString(p.name) || !validString(p.category) || typeof p.emoji !== 'string' || !validPrice(p.price) || typeof p.active !== 'boolean') throw new Error('Ungültige Produkte in der Sicherung.');
+    if(p.color!==undefined && !productColors.some(color=>color.id===p.color))throw new Error('Ungültige Produktfarbe in der Sicherung.');
     ids.add(p.id);
   }
   const saleIds = new Set();

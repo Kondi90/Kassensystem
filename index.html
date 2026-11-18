@@ -29,6 +29,7 @@
       <input name="id" type="hidden">
       <label>Produktname<input name="name" required maxlength="60" placeholder="Zum Beispiel: Marmorkuchen"></label>
       <label>Preis in €<input name="price" inputmode="text" required placeholder="2,50 oder -2,00" maxlength="8"></label>
+      <input name="color" type="hidden" value="default"><p class="field-label" id="color-label">Buttonfarbe auswählen</p><div id="color-picker" class="color-picker" role="group" aria-labelledby="color-label"></div>
       <input name="emoji" type="hidden" value="🍰"><p class="field-label" id="symbol-label">Symbol auswählen</p><div id="symbol-picker" class="symbol-picker" role="group" aria-labelledby="symbol-label"></div>
       <label class="checkbox"><input name="active" type="checkbox" checked> Auf der Kassenseite anzeigen</label>
       <p id="form-error" role="alert"></p><button class="primary" type="submit">Produkt speichern</button>
