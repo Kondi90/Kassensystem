@@ -8,11 +8,17 @@ let dataChannel;
 try { dataChannel = new BroadcastChannel('montessori-festkasse-database'); } catch { /* Focus refresh supports browsers without BroadcastChannel. */ }
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const colorStyle = id => {
+  const color=getProductColor(id);
+  return `--product-color:${color.background};--product-ink:${color.foreground||'#203d36'};--product-price-ink:${color.foreground||'#2b473c'}`;
+};
 function symbol(value) {
   if(value==='none')return '';
   const svg=body=>`<svg viewBox="0 0 64 64" class="wine-symbol" aria-hidden="true">${body}</svg>`;
   const bottles={
     wasserflasche:{glass:'#d2effa',liquid:'#8dcde7',cap:'#3d86bf',stroke:'#528da7',label:'<path d="M21 39q5-5 11 0t11 0M21 45q5-5 11 0t11 0" fill="none" stroke="#328bb5" stroke-width="2.5" stroke-linecap="round"/>'},
+    'limo-weiss':{glass:'#e4f2dc',liquid:'#f4edc5',cap:'#56955e',stroke:'#6c9a72',label:'<ellipse cx="32" cy="42" rx="10" ry="7" transform="rotate(-25 32 42)" fill="#f4e6a0" stroke="#cbb75c" stroke-width="1.5"/><path d="M33 33q2-7 9-5-1 6-9 5" fill="#5f9d4e"/><path d="m26 42 8-4" stroke="#fff9df" stroke-width="2" stroke-linecap="round"/>'},
+    'limo-gelb':{glass:'#efca6e',liquid:'#f4b838',cap:'#e88824',stroke:'#ba8b37',label:'<circle cx="32" cy="42" r="10" fill="#f2a333" stroke="#d58628" stroke-width="1.5"/><path d="M32 34v16m-7-12 14 8m-14 0 14-8" stroke="#fff0ad" stroke-width="1.6"/>'},
     apfelsaftflasche:{glass:'#e4e8bc',liquid:'#e7b14c',cap:'#568e48',stroke:'#9a8c46',label:'<path d="M32 37c-10-6-14 4-8 11 4 5 7 1 8 2 3 3 9-1 10-7 1-7-6-10-10-6Z" fill="#78a945"/><path d="m32 38-1-6" stroke="#7f5e32" stroke-width="2"/><path d="M33 34q3-7 9-5-1 7-9 5" fill="#4d8a42"/>'},
     speziflasche:{glass:'#aa7048',liquid:'#5e3528',cap:'#e57d2d',stroke:'#6d462f',label:'<circle cx="28" cy="42" r="8" fill="#f5a331"/><circle cx="36" cy="45" r="6" fill="#f7da69"/><path d="m28 36 0 11m-5-7 10 5m-1-8-8 8" stroke="#fff3bd" stroke-width="1.4"/>'},
     bierflasche:{glass:'#b57c35',liquid:'#99612d',cap:'#bb9540',stroke:'#79522b',label:'<path d="M32 33v18m0-14-5-3m5 8-5-3m5 8-5-3m5-7 5-3m-5 8 5-3m-5 8 5-3" fill="none" stroke="#b58c31" stroke-width="2" stroke-linecap="round"/>'}
@@ -27,6 +33,9 @@ function symbol(value) {
     latte:'<ellipse cx="30" cy="59" rx="21" ry="4" fill="#d7e1df"/><path d="M44 20h6c12 0 12 24 0 24h-7" fill="none" stroke="#91aeb3" stroke-width="4"/><path d="m15 10 3 43q0 5 5 5h14q5 0 5-5l3-43Z" fill="#d6edf0" stroke="#91aeb3" stroke-width="2"/><path d="m19 31 2 22q0 2 3 2h12q3 0 3-2l2-22Z" fill="#fff2d5"/><path d="m18 21 1 13h22l1-13Z" fill="#aa7145"/><ellipse cx="30" cy="11" rx="15" ry="6" fill="#fff7e8" stroke="#91aeb3" stroke-width="2"/><path d="m18 12 1 8q11 7 23 0l1-8Z" fill="#fff7e8"/><ellipse cx="30" cy="19" rx="12" ry="4" fill="#fff8ed"/><path d="m23 39 1 11" stroke="#fff" stroke-width="2" stroke-linecap="round"/>'
   };
   if(coffeeSymbols[value])return svg(coffeeSymbols[value]);
+  if(value==='teetasse')return svg('<ellipse cx="29" cy="56" rx="25" ry="5" fill="#d8dfcb"/><path d="M43 25h6c12 0 11 19 0 19h-6" fill="none" stroke="#779b79" stroke-width="4"/><path d="M9 23h36v18q0 13-18 13T9 41Z" fill="#f1f6df" stroke="#779b79" stroke-width="2"/><ellipse cx="27" cy="23" rx="18" ry="6" fill="#c59340" stroke="#779b79" stroke-width="2"/><path d="M35 22v14l10 6" fill="none" stroke="#e7e1ce" stroke-width="1.5"/><path d="m40 37 12 3-3 12-12-3Z" fill="#b1ca83" stroke="#779b79" stroke-width="1.5"/><path d="M21 12c-5-5 5-5 0-11m11 11c-5-5 5-5 0-11" fill="none" stroke="#aab7b5" stroke-width="2.5" stroke-linecap="round"/>');
+  if(value==='sektglas')return svg('<path d="M31 42v15m-10 3h20" fill="none" stroke="#86a6ae" stroke-width="3" stroke-linecap="round"/><path d="M20 5h22l-2 25q-1 13-9 13t-9-13Z" fill="#e9f6f7" stroke="#86a6ae" stroke-width="2"/><path d="m24 19 1 11q0 10 6 10t6-10l1-11Z" fill="#edcd6b"/><circle cx="30" cy="32" r="1.7" fill="#fff4c2"/><circle cx="34" cy="25" r="1.6" fill="#fff4c2"/><circle cx="29" cy="18" r="1.5" fill="#fff4c2"/><path d="m48 8 2 4 4 1-4 2-2 4-1-4-4-2 4-1Z" fill="#e7bb4b"/>');
+  if(value==='nussecke')return svg('<ellipse cx="32" cy="55" rx="29" ry="6" fill="#e1dfd5"/><path d="M7 51 29 9q2-4 5 0l24 42q2 4-4 5H11q-6 0-4-5Z" fill="#d4a35e" stroke="#a97837" stroke-width="2"/><path d="m12 47 19-34 20 34Z" fill="#b77e41"/><path d="m8 48 9-15 10 23H11q-6 0-3-8Zm41-14 9 17q2 4-4 5H38Z" fill="#67402e"/><path d="m27 22 3-3m4 7 3 1m-15 7 3 1m7 2 3-2m4 7 3 1m-14 4 3 1m-9-18 2-1m13 5 2-1" stroke="#f0d09a" stroke-width="3" stroke-linecap="round"/>');
   if(value==='aperol')return svg('<path d="M30 40v17m-11 3h22" fill="none" stroke="#82a5aa" stroke-width="3" stroke-linecap="round"/><path d="M13 8h34l-3 22q-2 14-14 14T16 30Z" fill="#e0f1f3" stroke="#82a5aa" stroke-width="2"/><path d="m17 21 2 9q1 11 11 11t11-11l2-9Z" fill="#ed853e"/><path d="m33 28 7-25h10" fill="none" stroke="#66796e" stroke-width="2.5" stroke-linecap="round"/><circle cx="18" cy="18" r="10" fill="#ffc468" stroke="#ed923e" stroke-width="2"/><path d="m18 10 0 16m-7-12 14 8m-14 0 14-8" stroke="#fff1b8" stroke-width="1.6"/><path d="m24 25 6-3 4 6-6 3Z" fill="#ffe7c0" opacity=".8"/>');
   if(value==='stamperl')return svg('<ellipse cx="32" cy="57" rx="19" ry="4" fill="#d4e2e2"/><path d="m12 12 6 42q1 5 6 5h16q5 0 6-5l6-42Z" fill="#d4eced" stroke="#80a5aa" stroke-width="2.5"/><path d="m19 30 4 21q0 3 3 3h12q3 0 3-3l4-21Z" fill="#e8b45e"/><ellipse cx="32" cy="30" rx="13" ry="4" fill="#f3cc86"/><ellipse cx="32" cy="12" rx="20" ry="6" fill="#f5faf9" stroke="#80a5aa" stroke-width="2"/><path d="m21 21 4 23" stroke="#fff" stroke-width="3" stroke-linecap="round"/>');
   if(value==='wert-5'||value==='wert-10')return svg(`<circle cx="32" cy="32" r="28" fill="${value==='wert-5'?'#f1ca68':'#a9cdeb'}" stroke="${value==='wert-5'?'#ba9135':'#5f90b6'}" stroke-width="3"/><circle cx="32" cy="32" r="22" fill="#fff9e8" stroke="${value==='wert-5'?'#ba9135':'#5f90b6'}" stroke-width="1.5"/><text x="32" y="44" text-anchor="middle" font-family="Arial,sans-serif" font-size="${value==='wert-5'?36:31}" font-weight="bold" fill="#354c43">${value==='wert-5'?'5':'10'}</text>`);
@@ -47,9 +56,9 @@ function symbol(value) {
   return `<svg viewBox="0 0 64 64" class="wine-symbol" aria-hidden="true"><path d="M22 17c-7-7 6-7 0-14M34 17c-7-7 6-7 0-14" fill="none" stroke="#a9b4b0" stroke-width="3" stroke-linecap="round"/><path d="M45 27h5c15 0 14 24 0 24h-6" fill="none" stroke="#7b9ca4" stroke-width="5"/><path d="M12 23h34v27q0 10-10 10H22q-10 0-10-10Z" fill="#dcecf0" stroke="#7b9ca4" stroke-width="2"/><path d="M16 31h26v19q0 6-6 6H22q-6 0-6-6Z" fill="${colors[value]}"/><ellipse cx="29" cy="31" rx="13" ry="3" fill="${colors[value]}"/><path d="M20 36v12" stroke="#fff" opacity=".5" stroke-width="3" stroke-linecap="round"/></svg>`;
 }
 const productSymbols = [
-  ['🍰','Kuchen'],['🧇','Waffel'],['bratwurstsemmel','Bratwurstsemmel'],['stockbrot','Stockbrot'],['kiachl','Kiachl'],['🍟','Pommes'],['plaetzchen','Plätzchen'],['🍪','Keks'],
-  ['wasserflasche','Wasserflasche'],['apfelsaftflasche','Apfelsaftflasche'],['speziflasche','Speziflasche'],['bierflasche','Bierflasche'],['flasche','Getränkeflasche'],['bier','Bier'],
-  ['☕','Kaffee'],['cappuccino','Cappuccino'],['espresso','Espresso'],['latte','Latte'],['aperol','Aperol'],['stamperl','Stampal'],
+  ['🍰','Kuchen'],['🧇','Waffel'],['bratwurstsemmel','Bratwurstsemmel'],['stockbrot','Stockbrot'],['kiachl','Kiachl'],['🍟','Pommes'],['plaetzchen','Plätzchen'],['🍪','Keks'],['nussecke','Nussecken'],
+  ['wasserflasche','Wasserflasche'],['apfelsaftflasche','Apfelsaftflasche'],['speziflasche','Speziflasche'],['bierflasche','Bierflasche'],['limo-weiss','Limo weiß'],['limo-gelb','Limo gelb'],['flasche','Getränkeflasche'],['bier','Bier'],
+  ['☕','Kaffee'],['cappuccino','Cappuccino'],['espresso','Espresso'],['latte','Latte'],['teetasse','Teetasse'],['aperol','Aperol'],['stamperl','Stampal'],['sektglas','Sektglas'],
   ['gluehwein-hell','Glühwein hell'],['gluehwein-rose','Glühwein rosé'],['gluehwein-dunkel','Glühwein dunkel'],
   ['stock','Stock / Stockpfand'],['pfand','Pfand'],['↩️','Pfand zurück'],['🍦','Eis'],['🎟️','Eintritt'],['wert-5','5er'],['wert-10','10er'],['none','Kein Symbol']
 ];
@@ -60,13 +69,14 @@ function renderSymbolPicker() {
 }
 function renderColorPicker() {
   const selected=$('#product-form').elements.color.value;
-  $('#color-picker').innerHTML=productColors.map(color=>`<button type="button" class="color-choice" style="--product-color:${color.background}" data-color="${color.id}" aria-label="Buttonfarbe ${color.label}" aria-pressed="${color.id===selected}"><span class="color-check" aria-hidden="true">${color.id===selected?'✓':''}</span>${color.label}</button>`).join('');
+  $('#color-picker').innerHTML=productColors.map(color=>`<button type="button" class="color-choice" style="${colorStyle(color.id)}" data-color="${color.id}" aria-label="Buttonfarbe ${color.label}" aria-pressed="${color.id===selected}"><span class="color-check" aria-hidden="true">${color.id===selected?'✓':''}</span>${color.label}</button>`).join('');
 }
 let state, page = 'kasse', cart = [], dayFilter = localDay(new Date()), productFilter = '', busy = false, toastTimer;
 let admin = { configured: false }, resetMode = 'bookings', resetSubmitting = false, pinSubmitting = false;
 let usageRequest = 0;
 let givenText = '', changeOpen = false;
 let reportBusy=false;
+let reordering=false;
 function clearCurrentSale() { cart=[];givenText='';changeOpen=false; }
 function confirmAction(message) {
   return new Promise(resolve=>{
@@ -103,6 +113,7 @@ async function refreshAfterSave() {
 }
 function render() {
   document.querySelectorAll('[data-page]').forEach(b => { b.classList.toggle('active', b.dataset.page === page); if (b.dataset.page === page) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
+  $('#main').classList.toggle('cash-main',page==='kasse');
   $('#main').innerHTML = page === 'kasse' ? cashPage() : page === 'statistik' ? statsPage() : settingsPage();
   if(page==='einstellungen')updateStorageUsage();else usageRequest++;
 }
@@ -121,7 +132,7 @@ function cashPage() {
   <div class="cash-layout"><section aria-label="Produkte">
     <div class="products">${products.map(p => {
       const n = cart.find(l => l.id===p.id)?.quantity || 0;
-      return `<button class="product ${p.category==='Getränke'?'drink':''} ${p.emoji==='none'?'no-symbol':''}" style="--product-color:${getProductColor(p.color).background}" data-add="${esc(p.id)}" aria-label="${esc(p.name)}, ${money(p.price)}, hinzufügen">${p.emoji==='none'?'':`<span class="product-symbol" aria-hidden="true">${symbol(p.emoji)}</span>`}${n ? `<span class="count-badge">${n}</span>`:''}<span class="product-name">${esc(p.name)}</span><span class="product-price">${money(p.price)}</span><span class="product-add" aria-hidden="true">+</span></button>`;
+      return `<button class="product ${p.category==='Getränke'?'drink':''} ${p.emoji==='none'?'no-symbol':''}" style="${colorStyle(p.color)}" data-add="${esc(p.id)}" title="${esc(p.name)}" aria-label="${esc(p.name)}, ${money(p.price)}, hinzufügen">${p.emoji==='none'?'':`<span class="product-symbol" aria-hidden="true">${symbol(p.emoji)}</span>`}${n ? `<span class="count-badge">${n}</span>`:''}<span class="product-name">${esc(p.name)}</span><span class="product-price">${money(p.price)}</span><span class="product-add" aria-hidden="true">+</span></button>`;
     }).join('')}</div>${!products.length ? '<div class="panel empty">Noch keine aktiven Produkte. Lege sie unter Einstellungen an.</div>' : ''}
   </section><aside class="cart" aria-label="Aktueller Verkauf"><div class="cart-heading"><h2>Aktueller Verkauf</h2><span class="tag">${count} Artikel</span></div>
     <div class="cart-lines">${cart.length ? cart.map(l => `<div class="cart-line"><div><div class="cart-line-name">${esc(l.name)}</div><div class="line-price">${money(l.price)} / Stück · ${money(l.price*l.quantity)}</div></div><div class="quantity"><button data-minus="${esc(l.id)}" aria-label="Ein ${esc(l.name)} entfernen">−</button><span>${l.quantity}</span><button data-plus="${esc(l.id)}" aria-label="Ein ${esc(l.name)} hinzufügen">+</button></div></div>`).join('') : '<div class="empty"><span class="empty-symbol" aria-hidden="true">♧</span>Hier ist Platz für Leckeres.<br>Wähle links die ersten Artikel aus.</div>'}</div>
@@ -163,7 +174,7 @@ function settingsPage() {
   const usage=summarizeData(state);
   return `
     <div class="notice">Die Startprodukte und Preise sind Beispiele. Für Pfand zwei Produkte anlegen, z. B. „Becherpfand“ mit 2,00 € und „Pfand zurück“ mit −2,00 €. Negative Preise werden vom Gesamtbetrag abgezogen. Preisänderungen verändern bereits gebuchte Verkäufe nicht.</div>
-    <section class="panel"><div class="section-heading"><h2>Eure Produkte <span class="tag">${state.products.filter(p=>p.active).length} aktiv</span></h2><button class="primary" id="new-product">+ Produkt anlegen</button></div><div class="table-wrap"><table class="product-table"><thead><tr><th>Produkt</th><th>Preis</th><th>Status</th><th></th></tr></thead><tbody>${state.products.map(p => `<tr style="--product-color:${getProductColor(p.color).background}"><td><div class="table-product"><span class="tiny-symbol">${symbol(p.emoji)}</span>${esc(p.name)}</div></td><td>${money(p.price)}</td><td><span class="status-dot ${p.active?'':'inactive'}">${p.active?'Aktiv':'Pausiert'}</span></td><td class="right"><button class="secondary" data-edit="${esc(p.id)}" aria-label="${esc(p.name)} bearbeiten">Bearbeiten</button></td></tr>`).join('')}</tbody></table></div></section>
+    <section class="panel"><div class="section-heading"><h2>Eure Produkte <span class="tag">${state.products.filter(p=>p.active).length} aktiv</span></h2><button class="primary" id="new-product">+ Produkt anlegen</button></div><p class="sub order-note">Mit den Pfeilen änderst du die Reihenfolge auf der Kassenseite.</p><div class="table-wrap"><table class="product-table"><thead><tr><th>Produkt</th><th>Preis</th><th>Status</th><th>Reihenfolge</th><th></th></tr></thead><tbody>${state.products.map((p,index) => `<tr style="${colorStyle(p.color)}"><td><div class="table-product"><span class="tiny-symbol">${symbol(p.emoji)}</span>${esc(p.name)}</div></td><td>${money(p.price)}</td><td><span class="status-dot ${p.active?'':'inactive'}">${p.active?'Aktiv':'Pausiert'}</span></td><td class="order-cell"><div class="product-order"><button class="order-button" data-move-product="${esc(p.id)}" data-direction="-1" aria-label="${esc(p.name)} nach oben" ${index===0||reordering?'disabled':''}>↑</button><button class="order-button" data-move-product="${esc(p.id)}" data-direction="1" aria-label="${esc(p.name)} nach unten" ${index===state.products.length-1||reordering?'disabled':''}>↓</button></div></td><td class="right"><button class="secondary" data-edit="${esc(p.id)}" aria-label="${esc(p.name)} bearbeiten">Bearbeiten</button></td></tr>`).join('')}</tbody></table></div></section>
     <section class="panel" aria-label="Daten und Speicher"><div class="section-heading"><h2>Daten & Speicher</h2><button class="text-button" id="refresh-storage">↻ Aktualisieren</button></div><div class="usage-grid"><div class="usage-card"><span class="usage-label">Gespeicherte Buchungen</span><strong>${usage.bookings.toLocaleString('de-DE')}</strong><small>${usage.active.toLocaleString('de-DE')} nicht storniert · ${usage.cancelled.toLocaleString('de-DE')} storniert</small><small>Alle Tage, inklusive Rückzahlungen</small></div><div class="usage-card"><span class="usage-label">Größe der Kassensicherung</span><strong>${formatBytes(usage.backupBytes)}</strong><small>Produkte und Buchungen als JSON, ohne PIN und Offline-Dateien.</small><small class="${usage.backupBytes>20_000_000?'danger':''}">${usage.backupBytes>20_000_000?'Diese Sicherung überschreitet die aktuelle Importgrenze von 20 MB.':'Aktuelle Importgrenze: 20 MB'}</small></div><div class="usage-card" id="device-storage" aria-live="polite"><span class="usage-label">Belegter Website-Speicher</span><strong>Wird ermittelt …</strong></div></div><p class="sub usage-note">Die Sicherungsgröße entspricht der heruntergeladenen JSON-Datei. Der Website-Speicher enthält zusätzlich technische Daten; andere Apps unter derselben Domain können mitgezählt werden. Das Speicherbudget ist keine Garantie für tatsächlich freien Gerätespeicher.</p></section>
     <div class="settings-grid"><section class="panel"><h2>Daten sichern</h2><p>Produkte und Buchungen liegen in einer lokalen IndexedDB-Datenbank auf diesem Gerät. Eine Sicherung schützt vor Datenverlust, etwa beim Löschen der Website-Daten. Die Statistik synchronisiert sich nicht mit anderen Geräten. Auch bisherige JSON-Sicherungen lassen sich wiederherstellen.</p><div class="actions"><button class="secondary" id="backup">↓ Sicherung herunterladen</button><button class="text-button" id="restore">Sicherung wiederherstellen</button><input class="hidden" type="file" id="backup-file" accept="application/json,.json"></div></section>
     <section class="panel"><h2>Als App verwenden</h2><p>Auf dem iPad die Kasse in Safari öffnen, auf „Teilen“ tippen und „Zum Home-Bildschirm“ wählen. Nach dem ersten vollständigen Laden kann die App offline genutzt werden.</p><p id="offline-note">Der Offline-Status wird geprüft …</p><p>Vor dem Fest einmal mit Beispielverkäufen auf dem vorgesehenen iPad testen und eine Sicherung anlegen.</p></section></div>
@@ -269,6 +280,22 @@ document.addEventListener('click', async event => {
       render();
       try { await save(()=>database.addSale(sale)); clearCurrentSale(); if(await refreshAfterSave())notify(`${sale.total<0?'Rückzahlung von '+money(-sale.total):money(sale.total)} gebucht. Bereit für den nächsten Verkauf.`); }
       finally { busy=false; render(); }
+    }
+    if(b.dataset.moveProduct && !reordering){
+      const id=b.dataset.moveProduct,direction=Number(b.dataset.direction);
+      reordering=true;document.querySelectorAll('[data-move-product]').forEach(button=>button.disabled=true);
+      try{await save(()=>database.moveProduct(id,direction));await refreshAfterSave();}
+      finally{
+        reordering=false;
+        if(page==='einstellungen'){
+          render();
+          if(!document.querySelector('dialog[open]')){
+            const controls=[...document.querySelectorAll('[data-move-product]')].filter(button=>button.dataset.moveProduct===id&&!button.disabled);
+            (controls.find(button=>Number(button.dataset.direction)===direction)||controls[0])?.focus();
+          }
+        }
+      }
+      return;
     }
     if (b.id==='new-product') openProduct();
     if (b.id==='refresh-storage') await refresh();

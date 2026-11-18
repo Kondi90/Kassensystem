@@ -15,7 +15,10 @@ export const productColors = [
   {id:'blue',label:'Blau',background:'#afcef8'},
   {id:'sky',label:'Hellblau',background:'#93dbe9'},
   {id:'purple',label:'Lila',background:'#d1b6ed'},
-  {id:'berry',label:'Beere',background:'#dca4c4'}
+  {id:'berry',label:'Beere',background:'#dca4c4'},
+  {id:'brown',label:'Braun',background:'#865638',foreground:'#ffffff'},
+  {id:'navy',label:'Dunkelblau',background:'#254b7c',foreground:'#ffffff'},
+  {id:'forest',label:'Dunkelgrün',background:'#245d3c',foreground:'#ffffff'}
 ];
 export const getProductColor = id => productColors.find(color=>color.id===id) || productColors[0];
 export const localDay = value => {

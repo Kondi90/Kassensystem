@@ -141,6 +141,28 @@ export function createStorage({
     });
   }
 
+  async function moveProduct(id, direction) {
+    if(typeof id!=='string'||!id||![-1,1].includes(direction))throw new Error('Ungültige Produktverschiebung.');
+    await initialize();
+    return transaction('readwrite',(tx,done,guard)=>{
+      const metadata=tx.objectStore('metadata'),request=metadata.get('state');
+      request.onsuccess=guard(()=>{
+        const products=tx.objectStore('products').getAll();
+        products.onsuccess=guard(()=>{
+          const ids=new Set(products.result.map(product=>product.id));
+          const order=request.result.productOrder.filter(productId=>ids.has(productId));
+          const known=new Set(order);
+          order.push(...products.result.filter(product=>!known.has(product.id)).map(product=>product.id));
+          const index=order.indexOf(id),target=index+direction;
+          if(index<0)throw new Error('Dieses Produkt wurde inzwischen gelöscht. Bitte die Produktliste neu öffnen.');
+          if(target<0||target>=order.length){done(false);return;}
+          [order[index],order[target]]=[order[target],order[index]];
+          metadata.put({...request.result,productOrder:order});done(true);
+        });
+      });
+    });
+  }
+
   async function deleteProduct(id) {
     if(typeof id!=='string'||!id)throw new Error('Ungültiges Produkt.');
     await initialize();
@@ -234,5 +256,5 @@ export function createStorage({
     connection?.close(); connection = null; opening = null; initializing = null;
   }
 
-  return { initialize, read, addSale, saveProduct, deleteProduct, cancelSale, restore, adminStatus, setAdminPin, resetBookings, resetAll, close };
+  return { initialize, read, addSale, saveProduct, moveProduct, deleteProduct, cancelSale, restore, adminStatus, setAdminPin, resetBookings, resetAll, close };
 }
