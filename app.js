@@ -77,6 +77,23 @@ let usageRequest = 0;
 let givenText = '', changeOpen = false;
 let reportBusy=false;
 let reordering=false;
+let cartRowsObserver;
+function updateCartListHeight() {
+  const list=$('.cart-lines');if(!list)return;
+  const rows=list.querySelectorAll('.cart-line');
+  if(rows.length<=5){list.style.maxHeight='none';return;}
+  const bottomPadding=parseFloat(getComputedStyle(list).paddingBottom)||0;
+  const height=Math.ceil(rows[4].getBoundingClientRect().bottom-list.getBoundingClientRect().top+list.scrollTop+bottomPadding);
+  if(height>0)list.style.maxHeight=height+'px';
+}
+function observeCartRows() {
+  cartRowsObserver?.disconnect();updateCartListHeight();
+  const rows=document.querySelectorAll('.cart-line');
+  if(rows.length>5 && 'ResizeObserver' in window){
+    cartRowsObserver=new ResizeObserver(updateCartListHeight);
+    [...rows].slice(0,5).forEach(row=>cartRowsObserver.observe(row));
+  }
+}
 function clearCurrentSale() { cart=[];givenText='';changeOpen=false; }
 function confirmAction(message) {
   return new Promise(resolve=>{
@@ -115,6 +132,7 @@ function render() {
   document.querySelectorAll('[data-page]').forEach(b => { b.classList.toggle('active', b.dataset.page === page); if (b.dataset.page === page) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
   $('#main').classList.toggle('cash-main',page==='kasse');
   $('#main').innerHTML = page === 'kasse' ? cashPage() : page === 'statistik' ? statsPage() : settingsPage();
+  observeCartRows();
   if(page==='einstellungen')updateStorageUsage();else usageRequest++;
 }
 async function updateStorageUsage() {
@@ -407,6 +425,7 @@ window.addEventListener('hashchange',()=>{const target=location.hash.slice(1);if
 function syncDatabase() { if(state) refresh().catch(error=>notify(`Datenbank konnte nicht gelesen werden: ${error.message}`,true)); }
 if(dataChannel) dataChannel.onmessage=syncDatabase;
 window.addEventListener('focus',syncDatabase);
+window.addEventListener('resize',updateCartListHeight);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncDatabase();});
 window.addEventListener('storage',event=>{if(event.key===LEGACY_KEY)notify('Eine alte Kassenversion hat den bisherigen Speicher geändert. Bitte alte Kassenfenster schließen. Bei Bedarf deren Daten separat sichern.',true);});
 window.addEventListener('beforeunload',event=>{if(cart.length){event.preventDefault();event.returnValue='';}});
